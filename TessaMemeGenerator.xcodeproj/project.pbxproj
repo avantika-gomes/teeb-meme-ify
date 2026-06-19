@@ -27,7 +27,6 @@
 		A10000000000000000000037 /* SavedMeme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000035 /* SavedMeme.swift */; };
 		A10000000000000000000038 /* MemeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000039 /* MemeStore.swift */; };
 		A1000000000000000000003A /* ShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000003B /* ShareSheet.swift */; };
-		A1000000000000000000003C /* DesignPreviewMocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000003D /* DesignPreviewMocks.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -54,7 +53,6 @@
 		A10000000000000000000035 /* SavedMeme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedMeme.swift; sourceTree = "<group>"; };
 		A10000000000000000000039 /* MemeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemeStore.swift; sourceTree = "<group>"; };
 		A1000000000000000000003B /* ShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSheet.swift; sourceTree = "<group>"; };
-		A1000000000000000000003D /* DesignPreviewMocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignPreviewMocks.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -83,7 +81,6 @@
 				A10000000000000000000020 /* TessaMemeGeneratorApp.swift */,
 				A10000000000000000000021 /* ContentView.swift */,
 				A10000000000000000000034 /* BrandTheme.swift */,
-				A1000000000000000000003D /* DesignPreviewMocks.swift */,
 				A10000000000000000000043 /* Models */,
 				A10000000000000000000044 /* Services */,
 				A10000000000000000000045 /* Views */,
@@ -226,7 +223,6 @@
 				A10000000000000000000019 /* CaptionView.swift in Sources */,
 				A1000000000000000000001A /* MemePreviewView.swift in Sources */,
 				A1000000000000000000003A /* ShareSheet.swift in Sources */,
-				A1000000000000000000003C /* DesignPreviewMocks.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
