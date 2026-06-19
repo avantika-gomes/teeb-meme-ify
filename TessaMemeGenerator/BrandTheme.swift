@@ -22,10 +22,6 @@ enum AppEnvironment {
     static var isRunningInPreview: Bool {
         ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PLAYGROUNDS"] == "1"
     }
-
-    static var samplePhoto: UIImage? {
-        UIImage(named: "TessaMasthead")
-    }
 }
 
 struct PrimaryBrandButtonStyle: ButtonStyle {
