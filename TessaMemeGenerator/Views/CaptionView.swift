@@ -73,9 +73,12 @@ struct CaptionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(BrandTheme.background, for: .navigationBar)
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker { image in
-                replacePhoto(with: image)
-            }
+            CameraPicker(
+                isPresented: $showCamera,
+                onImagePicked: { image in
+                    replacePhoto(with: image)
+                }
+            )
             .ignoresSafeArea()
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
@@ -102,30 +105,33 @@ struct CaptionView: View {
     private var photoSection: some View {
         Group {
             if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: 340)
-                    .overlay(alignment: .topTrailing) {
-                        HStack(spacing: 10) {
-                            if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                                Button {
-                                    showCamera = true
-                                } label: {
-                                    photoOverlayIcon("camera.fill")
+                HStack {
+                    Spacer(minLength: 0)
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 340)
+                        .overlay(alignment: .topTrailing) {
+                            HStack(spacing: 10) {
+                                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                                    Button {
+                                        showCamera = true
+                                    } label: {
+                                        photoOverlayIcon("camera.fill")
+                                    }
+                                    .accessibilityLabel("Retake photo")
                                 }
-                                .accessibilityLabel("Retake photo")
-                            }
 
-                            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                                photoOverlayIcon("photo.on.rectangle")
+                                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                                    photoOverlayIcon("photo.on.rectangle")
+                                }
+                                .accessibilityLabel("Change photo")
                             }
-                            .accessibilityLabel("Change photo")
+                            .padding(10)
                         }
-                        .padding(10)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius))
-                    .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius))
+                    Spacer(minLength: 0)
+                }
             }
         }
     }

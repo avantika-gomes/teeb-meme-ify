@@ -2,59 +2,75 @@ import SwiftUI
 import UIKit
 
 struct CameraPicker: UIViewControllerRepresentable {
+    @Binding var isPresented: Bool
     let onImagePicked: (UIImage) -> Void
-    @Environment(\.dismiss) private var dismiss
+    var onCaptureFailed: ((String) -> Void)?
 
     func makeUIViewController(context: Context) -> CameraContainerViewController {
         let container = CameraContainerViewController()
         let picker = UIImagePickerController()
         picker.sourceType = .camera
         picker.delegate = context.coordinator
+        picker.allowsEditing = false
         picker.showsCameraControls = true
         picker.cameraCaptureMode = .photo
+        picker.cameraDevice = .rear
         picker.modalPresentationStyle = .fullScreen
         picker.view.backgroundColor = .black
 
-        container.picker = picker
         container.embed(picker)
-        context.coordinator.picker = picker
         return container
     }
 
     func updateUIViewController(_ uiViewController: CameraContainerViewController, context: Context) {}
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+        Coordinator(
+            isPresented: $isPresented,
+            onImagePicked: onImagePicked,
+            onCaptureFailed: onCaptureFailed
+        )
     }
 
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        private let parent: CameraPicker
-        weak var picker: UIImagePickerController?
+        @Binding private var isPresented: Bool
+        private let onImagePicked: (UIImage) -> Void
+        private let onCaptureFailed: ((String) -> Void)?
 
-        init(_ parent: CameraPicker) {
-            self.parent = parent
+        init(
+            isPresented: Binding<Bool>,
+            onImagePicked: @escaping (UIImage) -> Void,
+            onCaptureFailed: ((String) -> Void)?
+        ) {
+            _isPresented = isPresented
+            self.onImagePicked = onImagePicked
+            self.onCaptureFailed = onCaptureFailed
         }
 
         func imagePickerController(
             _ picker: UIImagePickerController,
             didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
         ) {
-            if let image = info[.originalImage] as? UIImage {
-                let cropped = CameraImageCropper.cropToVisiblePreview(image: image, picker: picker)
-                parent.onImagePicked(cropped)
+            isPresented = false
+
+            guard let image = info[.originalImage] as? UIImage else {
+                onCaptureFailed?("Could not process the photo.")
+                return
             }
-            parent.dismiss()
+
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(300))
+                onImagePicked(image.normalizedUp())
+            }
         }
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
+            isPresented = false
         }
     }
 }
 
 final class CameraContainerViewController: UIViewController {
-    var picker: UIImagePickerController?
-
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
@@ -67,42 +83,6 @@ final class CameraContainerViewController: UIViewController {
         picker.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(picker.view)
         picker.didMove(toParent: self)
-    }
-}
-
-private enum CameraImageCropper {
-    /// Maps the on-screen camera preview (including pinch zoom) to a crop of the captured photo.
-    static func cropToVisiblePreview(image: UIImage, picker: UIImagePickerController) -> UIImage {
-        let normalized = image.normalizedUp()
-        let viewSize = picker.view.bounds.size
-        guard viewSize.width > 0, viewSize.height > 0 else { return normalized }
-
-        let imageSize = normalized.size
-        let transform = picker.cameraViewTransform
-
-        // Aspect-fill mapping from image space into the preview view.
-        let scale = max(viewSize.width / imageSize.width, viewSize.height / imageSize.height)
-        let fittedWidth = imageSize.width * scale
-        let fittedHeight = imageSize.height * scale
-        let xOffset = (viewSize.width - fittedWidth) / 2
-        let yOffset = (viewSize.height - fittedHeight) / 2
-
-        var imageToView = CGAffineTransform.identity
-            .translatedBy(x: xOffset, y: yOffset)
-            .scaledBy(x: scale, y: scale)
-
-        let viewToImage = imageToView.inverted().concatenating(transform.inverted())
-        let viewBounds = CGRect(origin: .zero, size: viewSize)
-        let cropRect = viewBounds.applying(viewToImage).integral
-
-        let bounds = CGRect(origin: .zero, size: imageSize)
-        let clamped = cropRect.intersection(bounds)
-        guard clamped.width > 1, clamped.height > 1,
-              let cgImage = normalized.cgImage?.cropping(to: clamped) else {
-            return normalized
-        }
-
-        return UIImage(cgImage: cgImage, scale: normalized.scale, orientation: .up)
     }
 }
 

@@ -12,8 +12,9 @@ enum PhotoStore {
         let id = UUID()
         let fileName = "\(id.uuidString).jpg"
         let fileURL = photosDirectory.appendingPathComponent(fileName)
+        let prepared = image.normalizedForSaving()
 
-        guard let data = image.jpegData(compressionQuality: 0.85) else {
+        guard let data = prepared.jpegData(compressionQuality: 0.85) else {
             throw PhotoStoreError.encodingFailed
         }
 
@@ -45,6 +46,19 @@ enum PhotoStore {
 
     static func loadImage(for photo: SavedPhoto) -> UIImage? {
         UIImage(contentsOfFile: photo.fileURL.path)
+    }
+}
+
+private extension UIImage {
+    func normalizedForSaving() -> UIImage {
+        if cgImage == nil || imageOrientation != .up {
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = scale
+            return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+                draw(in: CGRect(origin: .zero, size: size))
+            }
+        }
+        return self
     }
 }
 

@@ -43,18 +43,6 @@ struct HomeView: View {
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(SecondaryBrandButtonStyle())
-
-                            if AppEnvironment.isRunningInPreview, AppEnvironment.samplePhoto != nil {
-                                Button {
-                                    if let sample = AppEnvironment.samplePhoto {
-                                        handleNewImage(sample)
-                                    }
-                                } label: {
-                                    Label("Use Sample Photo (Preview)", systemImage: "photo.fill")
-                                        .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(SecondaryBrandButtonStyle())
-                            }
                         }
 
                         if !recentMemes.isEmpty {
@@ -125,9 +113,15 @@ struct HomeView: View {
             }
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker { image in
-                handleNewImage(image)
-            }
+            CameraPicker(
+                isPresented: $showCamera,
+                onImagePicked: { image in
+                    handleNewImage(image)
+                },
+                onCaptureFailed: { message in
+                    errorMessage = message
+                }
+            )
             .ignoresSafeArea()
         }
         .sheet(item: $shareItem) { item in
@@ -157,7 +151,7 @@ struct HomeView: View {
                 } catch {
                     await MainActor.run {
                         errorMessage = AppEnvironment.isRunningInPreview
-                            ? "Photo library is not available in canvas preview. Use “Use Sample Photo (Preview)” or run the app with ⌘R."
+                            ? "Photo library is not available in canvas preview. Run the app with ⌘R instead."
                             : "Could not open the photo library."
                         selectedPhotoItem = nil
                     }
