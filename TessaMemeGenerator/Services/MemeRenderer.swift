@@ -62,13 +62,19 @@ enum MemeRenderer {
         font: UIFont,
         paragraphStyle: NSParagraphStyle
     ) {
-        let outlineWidth = min(max(4, font.pointSize * 0.06), 18)
+        // Match MemeStyleText: offset black copies + white fill.
+        // NSAttributedString strokeWidth causes miter spikes on bold fonts.
+        let outlineOffset = max(2, font.pointSize * 0.05)
+        let outlineOffsets: [(CGFloat, CGFloat)] = [
+            (-outlineOffset, -outlineOffset),
+            (outlineOffset, -outlineOffset),
+            (-outlineOffset, outlineOffset),
+            (outlineOffset, outlineOffset)
+        ]
 
         let outlineAttributes: [NSAttributedString.Key: Any] = [
             .font: font,
-            .foregroundColor: UIColor.clear,
-            .strokeColor: UIColor.black,
-            .strokeWidth: outlineWidth,
+            .foregroundColor: UIColor.black,
             .paragraphStyle: paragraphStyle
         ]
 
@@ -79,11 +85,13 @@ enum MemeRenderer {
         ]
 
         let options: NSStringDrawingOptions = [.usesLineFragmentOrigin, .usesFontLeading]
+        let outline = NSAttributedString(string: text, attributes: outlineAttributes)
+        let fill = NSAttributedString(string: text, attributes: fillAttributes)
 
-        NSAttributedString(string: text, attributes: outlineAttributes)
-            .draw(with: rect, options: options, context: nil)
-        NSAttributedString(string: text, attributes: fillAttributes)
-            .draw(with: rect, options: options, context: nil)
+        for (dx, dy) in outlineOffsets {
+            outline.draw(with: rect.offsetBy(dx: dx, dy: dy), options: options, context: nil)
+        }
+        fill.draw(with: rect, options: options, context: nil)
     }
 
     private static func memeFont(
