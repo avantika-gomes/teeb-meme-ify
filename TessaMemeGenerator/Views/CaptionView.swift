@@ -155,11 +155,8 @@ struct CaptionView: View {
             Button {
                 Task { await generateCaptions() }
             } label: {
-                Label(
-                    hasGenerated ? "Regenerate" : "Generate Captions",
-                    systemImage: "sparkles"
-                )
-                .frame(maxWidth: .infinity)
+                Text(hasGenerated ? "Regenerate" : "Generate Captions")
+                    .frame(maxWidth: .infinity)
             }
             .buttonStyle(PrimaryBrandButtonStyle())
             .disabled(isLoading || image == nil)
@@ -245,7 +242,7 @@ struct CaptionView: View {
         Button {
             createMeme()
         } label: {
-            Label("Next: Position Text", systemImage: "text.below.photo")
+            Text("Next: Position Text")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(PrimaryBrandButtonStyle())

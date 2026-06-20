@@ -28,7 +28,8 @@ enum AppEnvironment {
 struct PrimaryBrandButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.body.weight(.semibold))
+            .font(.subheadline.weight(.semibold))
+            .textCase(.uppercase)
             .foregroundStyle(.white)
             .padding(.vertical, 14)
             .background(
@@ -41,7 +42,8 @@ struct PrimaryBrandButtonStyle: ButtonStyle {
 struct SecondaryBrandButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.body.weight(.semibold))
+            .font(.subheadline.weight(.semibold))
+            .textCase(.uppercase)
             .foregroundStyle(BrandTheme.ink)
             .padding(.vertical, 14)
             .background(
@@ -52,6 +54,35 @@ struct SecondaryBrandButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: BrandTheme.cornerRadius)
                     .stroke(BrandTheme.ink.opacity(configuration.isPressed ? 0.5 : 1), lineWidth: 1.5)
             )
+    }
+}
+
+struct GhostBrandButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.medium))
+            .textCase(.uppercase)
+            .foregroundStyle(BrandTheme.muted.opacity(configuration.isPressed ? 0.7 : 1))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 12)
+    }
+}
+
+struct BrandIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .foregroundStyle(BrandTheme.ink)
+            .frame(width: 48, height: 48)
+            .background(
+                RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
+                    .fill(BrandTheme.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
+                    .stroke(BrandTheme.border, lineWidth: 1)
+            )
+            .opacity(configuration.isPressed ? 0.85 : 1)
     }
 }
 
@@ -77,6 +108,46 @@ extension View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.86), value: message.wrappedValue)
+    }
+
+    func brandActionBarToast(message: Binding<String?>, above barHeight: CGFloat) -> some View {
+        overlay(alignment: .bottom) {
+            if let text = message.wrappedValue {
+                BrandFlatToast(message: text)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, barHeight + 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.86), value: message.wrappedValue)
+    }
+}
+
+struct BrandFlatToast: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.subheadline)
+                .foregroundStyle(BrandTheme.accent)
+
+            Text(message)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(BrandTheme.ink)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background {
+            RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
+                .fill(.ultraThinMaterial)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
+                .stroke(BrandTheme.border, lineWidth: 1)
+        }
     }
 }
 

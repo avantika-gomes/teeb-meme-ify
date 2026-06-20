@@ -32,14 +32,14 @@ struct HomeView: View {
                                 Button {
                                     showCamera = true
                                 } label: {
-                                    Label("Take Photo", systemImage: "camera.fill")
+                                    Text("Take Photo")
                                         .frame(maxWidth: .infinity)
                                 }
                                 .buttonStyle(PrimaryBrandButtonStyle())
                             }
 
                             PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                                Label("Choose Photo", systemImage: "photo.on.rectangle")
+                                Text("Choose Photo")
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(SecondaryBrandButtonStyle())

@@ -5,15 +5,18 @@ struct MemeEditorView: View {
     let photo: SavedPhoto
     @Binding var path: NavigationPath
 
+    @AppStorage("hasSeenMemeEditorHint") private var hasSeenMemeEditorHint = false
+
     @State private var layout = MemeTextLayout.default
     @State private var pinchBaseScale: CGFloat = 1.0
+    @State private var showPositionHint = false
 
     private var image: UIImage? {
         PhotoStore.loadImage(for: photo)
     }
 
     var body: some View {
-        VStack(spacing: 16) {
+        ZStack {
             GeometryReader { geometry in
                 if let image {
                     let displayRect = aspectFitRect(imageSize: image.size, in: geometry.size)
@@ -29,12 +32,63 @@ struct MemeEditorView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius))
-            .padding(.horizontal)
+            .padding(.horizontal, 12)
 
+            if showPositionHint {
+                VStack {
+                    Spacer()
+                    positionHint
+                        .padding(.bottom, 16)
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 8) {
+            editorBottomSheet
+        }
+        .brandScreen()
+        .navigationTitle("Position Text")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(BrandTheme.background, for: .navigationBar)
+        .onAppear {
+            pinchBaseScale = layout.fontScale
+            layout = clampedLayout(layout)
+            if !hasSeenMemeEditorHint {
+                showPositionHint = true
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: showPositionHint)
+    }
+
+    private var positionHint: some View {
+        Button {
+            dismissPositionHint()
+        } label: {
+            Text("Drag to move · Pinch to resize")
+                .font(.footnote.weight(.medium))
+                .textCase(.uppercase)
+                .foregroundStyle(BrandTheme.ink)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background {
+                    Capsule(style: .continuous)
+                        .fill(.ultraThinMaterial)
+                }
+                .overlay {
+                    Capsule(style: .continuous)
+                        .stroke(BrandTheme.border, lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Dismisses this tip")
+    }
+
+    private var editorBottomSheet: some View {
+        VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Alignment")
-                    .font(.subheadline)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(BrandTheme.muted)
+                    .textCase(.uppercase)
 
                 Picker("Alignment", selection: $layout.alignment) {
                     ForEach(MemeTextAlignment.allCases, id: \.self) { option in
@@ -44,47 +98,52 @@ struct MemeEditorView: View {
                 }
                 .pickerStyle(.segmented)
             }
-            .padding(.horizontal)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Text size")
-                        .font(.subheadline)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(BrandTheme.muted)
+                        .textCase(.uppercase)
                     Spacer()
                     Text("\(Int(layout.fontScale * 100))%")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(BrandTheme.muted)
                 }
+
                 Slider(
                     value: $layout.fontScale,
                     in: 0.4...2.5,
                     step: 0.05
                 )
+                .tint(BrandTheme.accent)
             }
-            .padding(.horizontal)
-
-            Text("Drag to move · Pinch to resize")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
 
             Button {
                 path.append(AppRoute.preview(caption: caption, photo: photo, layout: layout))
             } label: {
-                Label("Create Meme", systemImage: "checkmark.circle.fill")
+                Text("Create Meme")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(PrimaryBrandButtonStyle())
-            .padding(.horizontal)
-            .padding(.bottom)
         }
-        .brandScreen()
-        .navigationTitle("Position Text")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(BrandTheme.background, for: .navigationBar)
-        .onAppear {
-            pinchBaseScale = layout.fontScale
-            layout = clampedLayout(layout)
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+        .background {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.ultraThinMaterial)
         }
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(BrandTheme.border.opacity(0.6), lineWidth: 1)
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private func dismissPositionHint() {
+        hasSeenMemeEditorHint = true
+        showPositionHint = false
     }
 
     private func clampedLayout(_ value: MemeTextLayout) -> MemeTextLayout {
@@ -110,6 +169,7 @@ struct MemeEditorView: View {
             .gesture(
                 DragGesture()
                     .onChanged { value in
+                        dismissPositionHint()
                         let nx = (value.location.x - displayRect.minX) / displayRect.width
                         let ny = (value.location.y - displayRect.minY) / displayRect.height
                         layout.centerX = min(max(nx, 0.08), 0.92)
@@ -119,6 +179,7 @@ struct MemeEditorView: View {
             .simultaneousGesture(
                 MagnificationGesture()
                     .onChanged { value in
+                        dismissPositionHint()
                         layout.fontScale = min(max(pinchBaseScale * value, 0.4), 2.5)
                     }
                     .onEnded { _ in

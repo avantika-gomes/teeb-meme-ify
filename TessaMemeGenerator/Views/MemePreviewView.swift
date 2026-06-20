@@ -16,57 +16,47 @@ struct MemePreviewView: View {
     @State private var shareItem: ShareImageItem?
     @State private var confirmationDismissTask: Task<Void, Never>?
 
+    private let actionBarHeight: CGFloat = 72
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                if let memeImage {
-                    Image(uiImage: memeImage)
-                        .resizable()
-                        .scaledToFit()
-                        .clipShape(RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius))
-                } else {
-                    ProgressView("Rendering meme...")
-                        .frame(maxWidth: .infinity, minHeight: 200)
-                }
-
-                VStack(spacing: 12) {
-                    Button {
-                        saveToPhotos()
-                    } label: {
-                        Label("Save to Photos", systemImage: "square.and.arrow.down")
-                            .frame(maxWidth: .infinity)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 0) {
+                    if let memeImage {
+                        Image(uiImage: memeImage)
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius))
+                            .padding(.horizontal, 16)
+                            .padding(.top, 8)
+                            .padding(.bottom, 16)
+                    } else {
+                        ProgressView("Rendering meme...")
+                            .frame(maxWidth: .infinity, minHeight: 240)
                     }
-                    .buttonStyle(PrimaryBrandButtonStyle())
-                    .disabled(memeImage == nil)
-
-                    Button {
-                        if let memeImage {
-                            shareItem = ShareImageItem(image: memeImage)
-                        }
-                    } label: {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(SecondaryBrandButtonStyle())
-                    .disabled(memeImage == nil)
-
-                    Button {
-                        path = NavigationPath()
-                    } label: {
-                        Label("Done", systemImage: "house.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(SecondaryBrandButtonStyle())
                 }
             }
-            .padding()
+            .scrollContentBackground(.hidden)
+
+            previewActionBar
         }
-        .scrollContentBackground(.hidden)
         .brandScreen()
-        .brandConfirmationToast(message: $confirmationMessage)
+        .brandActionBarToast(message: $confirmationMessage, above: actionBarHeight)
         .navigationTitle("Your Meme")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(BrandTheme.background, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    path = NavigationPath()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(BrandTheme.ink)
+                }
+                .accessibilityLabel("Close")
+            }
+        }
         .onAppear {
             renderMeme()
         }
@@ -86,6 +76,39 @@ struct MemePreviewView: View {
         } message: {
             Text(errorMessage ?? "Please allow photo library access in Settings.")
         }
+    }
+
+    private var previewActionBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+                .overlay(BrandTheme.border)
+
+            HStack(spacing: 12) {
+                Button(action: saveToPhotos) {
+                    Text("Save")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(PrimaryBrandButtonStyle())
+                .disabled(memeImage == nil)
+
+                Button {
+                    if let memeImage {
+                        shareItem = ShareImageItem(image: memeImage)
+                    }
+                } label: {
+                    Text("Share")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(SecondaryBrandButtonStyle())
+                .disabled(memeImage == nil)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 12)
+        }
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func showConfirmation(_ message: String) {
