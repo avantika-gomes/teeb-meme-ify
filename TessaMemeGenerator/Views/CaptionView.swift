@@ -44,22 +44,16 @@ struct CaptionView: View {
                 generateSection
 
                 if isLoading {
-                    HStack {
-                        Spacer()
-                        ProgressView("Generating captions...")
-                        Spacer()
-                    }
+                    captionSkeletonSection
+                } else if hasGenerated && !captions.isEmpty {
+                    captionSelectionSection
                 }
 
-                if usingFallbackCaptions {
+                if usingFallbackCaptions && !isLoading {
                     Text("Couldn't reach AI right now — here are some starters. Tap Regenerate to try again.")
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-
-                if hasGenerated && !captions.isEmpty {
-                    captionSelectionSection
+                        .foregroundStyle(BrandTheme.muted)
+                        .multilineTextAlignment(.leading)
                 }
 
                 customCaptionSection
@@ -157,50 +151,60 @@ struct CaptionView: View {
     }
 
     private var generateSection: some View {
-        Button {
-            Task { await generateCaptions() }
-        } label: {
-            Label(
-                hasGenerated ? "Regenerate Captions" : "Generate Captions",
-                systemImage: "sparkles"
-            )
-            .frame(maxWidth: .infinity)
+        HStack(spacing: 12) {
+            Button {
+                Task { await generateCaptions() }
+            } label: {
+                Label(
+                    hasGenerated ? "Regenerate" : "Generate Captions",
+                    systemImage: "sparkles"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PrimaryBrandButtonStyle())
+            .disabled(isLoading || image == nil)
+
+            if isLoading {
+                ProgressView()
+                    .controlSize(.regular)
+                    .tint(BrandTheme.accent)
+            }
         }
-        .buttonStyle(PrimaryBrandButtonStyle())
-        .disabled(isLoading || image == nil)
+    }
+
+    private var captionSkeletonSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Pick a caption")
+                .font(.headline)
+                .foregroundStyle(BrandTheme.ink)
+
+            VStack(spacing: 10) {
+                ForEach(CaptionSkeletonRow.placeholderHeights, id: \.self) { height in
+                    CaptionSkeletonRow(height: height)
+                }
+            }
+        }
     }
 
     private var captionSelectionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Pick a caption")
                 .font(.headline)
+                .foregroundStyle(BrandTheme.ink)
 
-            ForEach(captions, id: \.self) { caption in
-                Button {
-                    selectedCaption = caption
-                    useCustomCaption = false
-                } label: {
-                    Text(caption)
-                        .font(.body.bold())
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius)
-                                .fill(BrandTheme.surface)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius)
-                                        .stroke(
-                                            !useCustomCaption && selectedCaption == caption
-                                                ? BrandTheme.accent
-                                                : BrandTheme.border,
-                                            lineWidth: !useCustomCaption && selectedCaption == caption ? 3 : 1
-                                        )
-                                )
+            VStack(spacing: 10) {
+                ForEach(captions, id: \.self) { caption in
+                    Button {
+                        selectedCaption = caption
+                        useCustomCaption = false
+                    } label: {
+                        CaptionPill(
+                            text: caption,
+                            isSelected: !useCustomCaption && selectedCaption == caption
                         )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -209,9 +213,22 @@ struct CaptionView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Or write your own caption")
                 .font(.headline)
+                .foregroundStyle(BrandTheme.ink)
+
             TextField("Enter your meme text", text: $customCaption)
-                .textFieldStyle(.roundedBorder)
+                .font(.subheadline.weight(useCustomCaption ? .semibold : .medium))
+                .foregroundStyle(BrandTheme.ink)
                 .textInputAutocapitalization(.characters)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
+                        .fill(useCustomCaption ? BrandTheme.accentSoft : BrandTheme.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
+                        .stroke(useCustomCaption ? BrandTheme.accent : BrandTheme.border, lineWidth: 1)
+                )
                 .onChange(of: customCaption) { _, newValue in
                     let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !trimmed.isEmpty {
@@ -221,14 +238,6 @@ struct CaptionView: View {
                         useCustomCaption = false
                     }
                 }
-                .padding(4)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(
-                            useCustomCaption ? BrandTheme.accent : Color.clear,
-                            lineWidth: 2
-                        )
-                )
         }
     }
 
@@ -290,5 +299,66 @@ struct CaptionView: View {
     private func createMeme() {
         guard let activeCaption else { return }
         path.append(AppRoute.editor(caption: activeCaption, photo: currentPhoto))
+    }
+}
+
+private struct CaptionPill: View {
+    let text: String
+    let isSelected: Bool
+
+    var body: some View {
+        Text(text)
+            .font(.subheadline.weight(isSelected ? .semibold : .medium))
+            .foregroundStyle(BrandTheme.ink)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
+                    .fill(isSelected ? BrandTheme.accentSoft : BrandTheme.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
+                    .stroke(isSelected ? BrandTheme.accent : BrandTheme.border, lineWidth: 1)
+            )
+    }
+}
+
+private struct CaptionSkeletonRow: View {
+    static let placeholderHeights: [CGFloat] = [44, 52, 44, 48]
+
+    let height: CGFloat
+    @State private var shimmerOffset: CGFloat = -1
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
+            .fill(BrandTheme.border.opacity(0.35))
+            .frame(height: height)
+            .overlay {
+                GeometryReader { geometry in
+                    RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    .clear,
+                                    BrandTheme.surface.opacity(0.75),
+                                    .clear,
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: geometry.size.width * 0.45)
+                        .offset(x: shimmerOffset * geometry.size.width)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous))
+            .onAppear {
+                withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
+                    shimmerOffset = 1.4
+                }
+            }
+            .accessibilityLabel("Loading caption")
     }
 }

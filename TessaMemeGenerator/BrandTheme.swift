@@ -7,6 +7,7 @@ enum BrandTheme {
     static let surface = Color.white
     static let muted = Color(red: 0.541, green: 0.541, blue: 0.541)
     static let border = Color(red: 0.91, green: 0.91, blue: 0.91)
+    static let accentSoft = Color(red: 1.0, green: 0.941, blue: 0.953)
 
     static let cornerRadius: CGFloat = 14
     static let photoCornerRadius: CGFloat = 12
