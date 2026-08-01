@@ -13,6 +13,7 @@ struct CaptionView: View {
     @State private var customCaption = ""
     @State private var useCustomCaption = false
     @State private var isLoading = false
+    @State private var isRefining = false
     @State private var usingFallbackCaptions = false
     @State private var hasGenerated = false
     @State private var showCamera = false
@@ -202,7 +203,20 @@ struct CaptionView: View {
                     }
                     .buttonStyle(.plain)
                 }
+
+                if isRefining {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Writing a few more…")
+                            .font(.footnote)
+                            .foregroundStyle(BrandTheme.muted)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.top, 2)
+                }
             }
+            .animation(.easeOut(duration: 0.25), value: captions)
         }
     }
 
@@ -280,10 +294,30 @@ struct CaptionView: View {
 
         do {
             let service = try OpenAIService()
-            let results = try await service.generateCaptions(for: image, steeringText: steeringText)
-            captions = results
-            hasGenerated = true
-            usingFallbackCaptions = false
+            let stream = service.captionStream(
+                for: image,
+                steeringText: steeringText,
+                context: CaptionContext.forPhoto(capturedAt: currentPhoto.createdAt)
+            )
+
+            var received = false
+            for await batch in stream {
+                received = true
+                captions = batch
+                hasGenerated = true
+                usingFallbackCaptions = false
+                isLoading = false
+                isRefining = true
+            }
+            isRefining = false
+
+            // Both styles failed. Captions may still hold the previous run's results, so key the
+            // fallback off whether anything arrived rather than off the array being empty.
+            if !received {
+                captions = CaptionFallback.generate(steeringText: steeringText)
+                usingFallbackCaptions = true
+                hasGenerated = true
+            }
         } catch {
             captions = CaptionFallback.generate(steeringText: steeringText)
             usingFallbackCaptions = true
@@ -291,6 +325,7 @@ struct CaptionView: View {
         }
 
         isLoading = false
+        isRefining = false
     }
 
     private func createMeme() {
@@ -323,7 +358,7 @@ private struct CaptionPill: View {
 }
 
 private struct CaptionSkeletonRow: View {
-    static let placeholderHeights: [CGFloat] = [44, 52, 44, 48]
+    static let placeholderHeights: [CGFloat] = [44, 52, 44]
 
     let height: CGFloat
     @State private var shimmerOffset: CGFloat = -1

@@ -26,3 +26,6 @@ build/
 *.ipa
 *.dSYM.zip
 *.dSYM
+
+# Local prompt-testing lab (results + personal sample photos, intentionally not shared)
+scripts/prompt-testing/

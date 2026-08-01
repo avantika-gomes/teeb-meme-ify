@@ -300,6 +300,8 @@ struct HomeView: View {
     }
 }
 
+#if DEBUG
 #Preview("Teeb Meme-ify") {
     TeebMemifyAppPreview()
 }
+#endif
