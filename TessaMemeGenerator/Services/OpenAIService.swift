@@ -3,6 +3,7 @@ import UIKit
 enum OpenAIServiceError: LocalizedError {
     case missingAPIKey
     case invalidResponse
+    case refused
     case apiError(String)
 
     var errorDescription: String? {
@@ -11,8 +12,19 @@ enum OpenAIServiceError: LocalizedError {
             return "OpenAI API key is missing. Add it to Config/Secrets.xcconfig."
         case .invalidResponse:
             return "Could not parse caption response."
+        case .refused:
+            return "The model declined to caption this photo."
         case .apiError(let message):
             return message
+        }
+    }
+
+    /// Refusals and unparseable replies are usually one-off; the same request often succeeds
+    /// on a second try. A missing key or an HTTP error will not fix itself.
+    var isWorthRetrying: Bool {
+        switch self {
+        case .refused, .invalidResponse: return true
+        case .missingAPIKey, .apiError: return false
         }
     }
 }
@@ -267,7 +279,28 @@ private func buildPrompt(
     return prompt
 }
 
+/// gpt-4o declines roughly one caption request in ten, seemingly at random and more often on
+/// photos with people in them. A refusal arrives as a normal 200 response with null content, so
+/// without a retry it silently costs the user that entire style.
 private func requestCaptions(
+    style: CaptionStyle,
+    base64: String,
+    steeringText: String,
+    context: CaptionContext,
+    apiKey: String
+) async throws -> [String] {
+    do {
+        return try await performCaptionRequest(
+            style: style, base64: base64, steeringText: steeringText, context: context, apiKey: apiKey
+        )
+    } catch let error as OpenAIServiceError where error.isWorthRetrying {
+        return try await performCaptionRequest(
+            style: style, base64: base64, steeringText: steeringText, context: context, apiKey: apiKey
+        )
+    }
+}
+
+private func performCaptionRequest(
     style: CaptionStyle,
     base64: String,
     steeringText: String,
@@ -304,7 +337,13 @@ private func requestCaptions(
     }
 
     let apiResponse = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
-    guard let content = apiResponse.choices.first?.message.content,
+    let message = apiResponse.choices.first?.message
+
+    if message?.refusal != nil {
+        throw OpenAIServiceError.refused
+    }
+
+    guard let content = message?.content,
           let contentData = content.data(using: .utf8) else {
         throw OpenAIServiceError.invalidResponse
     }
@@ -329,6 +368,7 @@ private struct ChatCompletionResponse: Decodable {
     }
 
     struct Message: Decodable {
-        let content: String
+        let content: String?
+        let refusal: String?
     }
 }
