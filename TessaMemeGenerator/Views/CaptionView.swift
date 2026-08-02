@@ -71,7 +71,7 @@ struct CaptionView: View {
             CameraPicker(
                 isPresented: $showCamera,
                 onImagePicked: { image in
-                    replacePhoto(with: image)
+                    replacePhoto(with: image, captured: .now)
                 }
             )
             .ignoresSafeArea()
@@ -84,8 +84,10 @@ struct CaptionView: View {
                           let image = UIImage(data: data) else {
                         return
                     }
+                    // Read EXIF from the original data; UIImage has already dropped it.
+                    let captured = PhotoMetadata.capture(from: data)
                     await MainActor.run {
-                        replacePhoto(with: image)
+                        replacePhoto(with: image, captured: captured)
                         selectedPhotoItem = nil
                     }
                 } catch {
@@ -263,8 +265,8 @@ struct CaptionView: View {
         .disabled(activeCaption == nil || image == nil)
     }
 
-    private func replacePhoto(with image: UIImage) {
-        guard let saved = try? PhotoStore.save(image) else { return }
+    private func replacePhoto(with image: UIImage, captured: PhotoCapture?) {
+        guard let saved = try? PhotoStore.save(image, captured: captured) else { return }
         currentPhoto = saved
         resetCaptionState()
     }
@@ -294,10 +296,11 @@ struct CaptionView: View {
 
         do {
             let service = try OpenAIService()
+            let placeName = await PhotoStore.resolvedPlaceName(for: currentPhoto)
             let stream = service.captionStream(
                 for: image,
                 steeringText: steeringText,
-                context: CaptionContext.forPhoto(capturedAt: currentPhoto.createdAt)
+                context: CaptionContext.forCapture(currentPhoto.captureMoment, placeName: placeName)
             )
 
             var received = false

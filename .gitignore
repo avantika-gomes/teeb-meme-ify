@@ -29,3 +29,6 @@ build/
 
 # Local prompt-testing lab (results + personal sample photos, intentionally not shared)
 scripts/prompt-testing/
+
+# Local handoff notes
+handoff/

@@ -116,7 +116,7 @@ struct HomeView: View {
             CameraPicker(
                 isPresented: $showCamera,
                 onImagePicked: { image in
-                    handleNewImage(image)
+                    handleNewImage(image, captured: .now)
                 },
                 onCaptureFailed: { message in
                     errorMessage = message
@@ -144,8 +144,10 @@ struct HomeView: View {
                         }
                         return
                     }
+                    // Read EXIF from the original data; UIImage has already dropped it.
+                    let captured = PhotoMetadata.capture(from: data)
                     await MainActor.run {
-                        handleNewImage(image)
+                        handleNewImage(image, captured: captured)
                         selectedPhotoItem = nil
                     }
                 } catch {
@@ -288,9 +290,9 @@ struct HomeView: View {
         recentPhotos = PhotoStore.loadAll()
     }
 
-    private func handleNewImage(_ image: UIImage) {
+    private func handleNewImage(_ image: UIImage, captured: PhotoCapture?) {
         do {
-            let saved = try PhotoStore.save(image)
+            let saved = try PhotoStore.save(image, captured: captured)
             reloadRecents()
             path.append(AppRoute.captions(saved))
             errorMessage = nil

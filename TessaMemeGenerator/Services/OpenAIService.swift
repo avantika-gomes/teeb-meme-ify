@@ -29,52 +29,6 @@ enum OpenAIServiceError: LocalizedError {
     }
 }
 
-/// Ambient context handed to the model alongside the photo.
-///
-/// Deliberately derived without GPS. Blind testing showed that reverse-geocoded placemarks
-/// ("Lincoln Square, New York, NY") pushed the model into name-dropping the neighborhood, which
-/// scored worse than supplying no location at all. Day, time, and city are cheap, permission-free,
-/// and offered to the model as strictly optional colour.
-struct CaptionContext {
-    let capturedAt: Date
-    let cityName: String?
-
-    static func forPhoto(capturedAt: Date) -> CaptionContext {
-        CaptionContext(capturedAt: capturedAt, cityName: currentCityName())
-    }
-
-    /// The device time zone doubles as a coarse city hint: "America/New_York" becomes "New York".
-    private static func currentCityName() -> String? {
-        guard let component = TimeZone.current.identifier.split(separator: "/").last else {
-            return nil
-        }
-        let city = component.replacingOccurrences(of: "_", with: " ")
-        return city.isEmpty ? nil : city
-    }
-
-    var promptLine: String? {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "EEEE"
-
-        var line = "\(formatter.string(from: capturedAt)) \(timeOfDay)"
-        if let cityName {
-            line += ", \(cityName)"
-        }
-        return line
-    }
-
-    private var timeOfDay: String {
-        switch Calendar.current.component(.hour, from: capturedAt) {
-        case 5..<9: return "early morning"
-        case 9..<12: return "morning"
-        case 12..<17: return "afternoon"
-        case 17..<21: return "evening"
-        default: return "late night"
-        }
-    }
-}
-
 /// The two prompts that won blind head-to-head testing. They favour different photos — the
 /// candidate-scoring style tends to win busy scenes, the self-roast style tends to win portraits —
 /// so the app runs both and mixes the results.
@@ -83,9 +37,11 @@ enum CaptionStyle: CaseIterable {
     case drySelfRoast
 
     private static let optionalContext = """
-    OPTIONAL CONTEXT: the line below may give the day, time of day, and city. Using it is optional. \
-    If the time of day, the place, or the city makes a caption funnier or wittier, work it in. \
-    If it adds nothing, ignore it.
+    OPTIONAL CONTEXT: the line below may give the day, time of day, and city. Use it to sense the \
+    setting — the city's energy, and what someone living there right now might actually care about \
+    (sports, transit, weather, rent, local culture) — and let that shape the humour. Naming the \
+    place is optional: do it only where it genuinely makes a caption funnier or wittier. One \
+    caption may nod to local culture; the rest should just feel place-aware.
     """
 
     var template: String {
@@ -104,7 +60,7 @@ enum CaptionStyle: CaseIterable {
 
             RULES for all candidates:
             - Max 15 words each. ALL CAPS.
-            - No puns or wordplay. No hashtags, no emojis.
+            - No puns or wordplay (no "bark-ccino", "paw-some", "ruff day"). No hashtags, no emojis.
 
             \(Self.optionalContext)
 
@@ -126,7 +82,7 @@ enum CaptionStyle: CaseIterable {
             - Wit from observation. If you can swap the photo and the caption still works, it's too generic.
 
             BANNED:
-            - Puns and wordplay
+            - Puns and wordplay (no "bark-ccino", "paw-some", "ruff day")
             - Tired meme formats used lazily ("nobody:", "when you see it", "it be like that")
             - Explaining the joke
             - Hashtags, emojis
