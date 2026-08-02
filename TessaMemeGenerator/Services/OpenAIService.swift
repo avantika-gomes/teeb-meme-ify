@@ -37,11 +37,9 @@ enum CaptionStyle: CaseIterable {
     case drySelfRoast
 
     private static let optionalContext = """
-    OPTIONAL CONTEXT: the line below may give the day, time of day, and city. Use it to sense the \
-    setting — the city's energy, and what someone living there right now might actually care about \
-    (sports, transit, weather, rent, local culture) — and let that shape the humour. Naming the \
-    place is optional: do it only where it genuinely makes a caption funnier or wittier. One \
-    caption may nod to local culture; the rest should just feel place-aware.
+    OPTIONAL CONTEXT: the line below may give the day, time, and city. It is background only — most \
+    captions should ignore it completely. Never name the city or neighbourhood unless doing so \
+    genuinely makes the joke land better.
     """
 
     var template: String {
