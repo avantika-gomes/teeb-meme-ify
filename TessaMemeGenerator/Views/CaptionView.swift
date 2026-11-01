@@ -7,17 +7,21 @@ struct CaptionView: View {
     @Binding var path: NavigationPath
 
     @State private var currentPhoto: SavedPhoto
+    @State private var mode: CaptionMode = .suggestions
     @State private var steeringText = ""
     @State private var captions: [String] = []
     @State private var selectedCaption: String?
     @State private var customCaption = ""
-    @State private var useCustomCaption = false
     @State private var isLoading = false
     @State private var isRefining = false
     @State private var usingFallbackCaptions = false
     @State private var hasGenerated = false
     @State private var showCamera = false
     @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var toastMessage: String?
+    @State private var toastDismissTask: Task<Void, Never>?
+
+    private let bottomBarHeight: CGFloat = 84
 
     init(photo: SavedPhoto, path: Binding<NavigationPath>) {
         self.photo = photo
@@ -25,48 +29,75 @@ struct CaptionView: View {
         self._currentPhoto = State(initialValue: photo)
     }
 
+    private enum CaptionMode: Hashable {
+        case suggestions
+        case writeMyOwn
+
+        var title: String {
+            switch self {
+            case .suggestions: "SUGGESTIONS"
+            case .writeMyOwn: "WRITE MY OWN"
+            }
+        }
+    }
+
     private var image: UIImage? {
         PhotoStore.loadImage(for: currentPhoto)
     }
 
     private var activeCaption: String? {
-        if useCustomCaption {
+        switch mode {
+        case .writeMyOwn:
             let trimmed = customCaption.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : trimmed
+        case .suggestions:
+            return selectedCaption
         }
-        return selectedCaption
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                photoSection
-                steeringSection
-                generateSection
+        VStack(spacing: 0) {
+            FlowHeader(
+                step: 1,
+                onBack: { path.removeLast() },
+                onClose: { path = NavigationPath() }
+            )
 
-                if isLoading {
-                    captionSkeletonSection
-                } else if hasGenerated && !captions.isEmpty {
-                    captionSelectionSection
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("MAKE A BAD JOKE")
+                        .font(BrandTheme.displayFont(size: 26))
+                        .foregroundStyle(BrandTheme.ink)
+
+                    photoFrame
+
+                    BrandSegmentedControl(options: [CaptionMode.suggestions, .writeMyOwn], selection: $mode) { option, isSelected in
+                        Text(option.title)
+                            .font(BrandTheme.bodyFont(size: 13, weight: .bold))
+                            .foregroundStyle(isSelected ? BrandTheme.ink : BrandTheme.muted)
+                    }
+
+                    if mode == .suggestions {
+                        suggestionsSection
+                    } else {
+                        writeMyOwnSection
+                    }
                 }
-
-                if usingFallbackCaptions && !isLoading {
-                    Text("Couldn't reach AI right now — here are some starters. Tap Regenerate to try again.")
-                        .font(.footnote)
-                        .foregroundStyle(BrandTheme.muted)
-                        .multilineTextAlignment(.leading)
-                }
-
-                customCaptionSection
-                createMemeButton
+                .padding(16)
+                .padding(.bottom, bottomBarHeight)
             }
-            .padding()
+
+            bottomBar
         }
-        .scrollContentBackground(.hidden)
-        .brandScreen()
-        .navigationTitle(hasGenerated ? "Captions" : "Your Photo")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(BrandTheme.background, for: .navigationBar)
+        .background(BrandTheme.background.ignoresSafeArea())
+        .brandActionBarToast(message: $toastMessage, above: bottomBarHeight)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .onAppear {
+            if !hasGenerated {
+                Task { await generateCaptions() }
+            }
+        }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPicker(
                 isPresented: $showCamera,
@@ -99,183 +130,346 @@ struct CaptionView: View {
         }
     }
 
-    private var photoSection: some View {
-        Group {
-            if let image {
-                HStack {
-                    Spacer(minLength: 0)
+    // MARK: - Photo frame
+
+    private var photoFrame: some View {
+        GeometryReader { geo in
+            let side = geo.size.width
+
+            ZStack(alignment: .topLeading) {
+                if let image {
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFit()
-                        .frame(maxHeight: 340)
-                        .overlay(alignment: .topTrailing) {
-                            HStack(spacing: 10) {
-                                if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                                    Button {
-                                        showCamera = true
-                                    } label: {
-                                        photoOverlayIcon("camera.fill")
-                                    }
-                                    .accessibilityLabel("Retake photo")
-                                }
+                        .scaledToFill()
+                        .frame(width: side, height: side)
+                        .clipped()
+                } else {
+                    BrandTheme.skeleton
+                }
 
-                                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                                    photoOverlayIcon("photo.on.rectangle")
-                                }
-                                .accessibilityLabel("Change photo")
-                            }
-                            .padding(10)
+                if let activeCaption, !activeCaption.isEmpty {
+                    VStack {
+                        Spacer(minLength: 0)
+                        HStack {
+                            MemeStyleText(text: activeCaption, fontSize: side * 0.085, alignment: .left)
+                                .frame(maxWidth: side * 0.88, alignment: .leading)
+                            Spacer(minLength: 0)
                         }
-                        .clipShape(RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius))
+                    }
+                    .padding(16)
+                }
+
+                VStack {
+                    HStack {
+                        Spacer(minLength: 0)
+                        photoActionButtons
+                    }
                     Spacer(minLength: 0)
                 }
+                .padding(10)
             }
+            .frame(width: side, height: side)
         }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(BrandTheme.ink, lineWidth: 2)
+        )
     }
 
-    private func photoOverlayIcon(_ systemName: String) -> some View {
-        Image(systemName: systemName)
-            .font(.body.weight(.semibold))
-            .foregroundStyle(.white)
-            .frame(width: 40, height: 40)
-            .background {
-                Circle()
-                    .fill(BrandTheme.ink.opacity(0.62))
+    private var photoActionButtons: some View {
+        HStack(spacing: 10) {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                Button {
+                    showCamera = true
+                } label: {
+                    photoIconButton {
+                        Circle()
+                            .stroke(BrandTheme.ink, lineWidth: 2)
+                            .frame(width: 16, height: 16)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Retake photo")
             }
-    }
 
-    private var steeringSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Steer the captions (optional)")
-                .font(.headline)
-            TextField("e.g. make it about Monday mornings", text: $steeringText)
-                .textFieldStyle(.roundedBorder)
-        }
-    }
-
-    private var generateSection: some View {
-        HStack(spacing: 12) {
-            Button {
-                Task { await generateCaptions() }
-            } label: {
-                Text(hasGenerated ? "Regenerate" : "Generate Captions")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(PrimaryBrandButtonStyle())
-            .disabled(isLoading || image == nil)
-
-            if isLoading {
-                ProgressView()
-                    .controlSize(.regular)
-                    .tint(BrandTheme.accent)
-            }
-        }
-    }
-
-    private var captionSkeletonSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Pick a caption")
-                .font(.headline)
-                .foregroundStyle(BrandTheme.ink)
-
-            VStack(spacing: 10) {
-                ForEach(CaptionSkeletonRow.placeholderHeights, id: \.self) { height in
-                    CaptionSkeletonRow(height: height)
+            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                photoIconButton {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach([16, 12, 8], id: \.self) { width in
+                            Capsule()
+                                .fill(BrandTheme.ink)
+                                .frame(width: CGFloat(width), height: 2.5)
+                        }
+                    }
                 }
             }
+            .accessibilityLabel("Change photo")
         }
     }
 
-    private var captionSelectionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Pick a caption")
-                .font(.headline)
-                .foregroundStyle(BrandTheme.ink)
+    private func photoIconButton(@ViewBuilder glyph: () -> some View) -> some View {
+        glyph()
+            .frame(width: 38, height: 38)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(BrandTheme.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(BrandTheme.ink, lineWidth: 2)
+            )
+    }
 
-            VStack(spacing: 10) {
+    // MARK: - Suggestions mode
+
+    private var suggestionsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("TAP TO SELECT")
+                    .font(BrandTheme.bodyFont(size: 10, weight: .bold))
+                    .tracking(0.6)
+                    .foregroundStyle(BrandTheme.hint)
+
+                captionDeck
+            }
+
+            if usingFallbackCaptions && !isLoading {
+                Text("Couldn't reach AI right now — here are some starters. Tap ↻ to try again.")
+                    .font(BrandTheme.bodyFont(size: 12))
+                    .foregroundStyle(BrandTheme.muted)
+                    .multilineTextAlignment(.leading)
+            }
+
+            steerRow
+        }
+    }
+
+    /// Total captions OpenAIService aims to return, so the deck knows how many trailing skeleton
+    /// slots to reserve while some are still streaming in.
+    private var expectedCaptionCount: Int {
+        OpenAIService.captionsPerStyle * CaptionStyle.allCases.count
+    }
+
+    private var isStillGenerating: Bool {
+        isLoading || isRefining
+    }
+
+    /// One continuous horizontal row: loaded captions first, then shimmer placeholders for
+    /// whatever's still streaming in. Scrolling to the end shows a real card once it arrives
+    /// instead of a separate "writing a few more" indicator elsewhere on screen.
+    private var captionDeck: some View {
+        ScrollView(.horizontal, showsIndicators: true) {
+            HStack(spacing: 10) {
                 ForEach(captions, id: \.self) { caption in
-                    Button {
-                        selectedCaption = caption
-                        useCustomCaption = false
-                    } label: {
-                        CaptionPill(
-                            text: caption,
-                            isSelected: !useCustomCaption && selectedCaption == caption
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    captionCard(caption)
                 }
 
-                if isRefining {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("Writing a few more…")
-                            .font(.footnote)
-                            .foregroundStyle(BrandTheme.muted)
-                        Spacer(minLength: 0)
+                if isStillGenerating {
+                    ForEach(0..<max(0, expectedCaptionCount - captions.count), id: \.self) { _ in
+                        skeletonCard
                     }
-                    .padding(.top, 2)
                 }
             }
-            .animation(.easeOut(duration: 0.25), value: captions)
+            .padding(.vertical, 2)
         }
     }
 
-    private var customCaptionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Or write your own caption")
-                .font(.headline)
-                .foregroundStyle(BrandTheme.ink)
+    // Height is fixed so a card never resizes the row when it swaps from skeleton to real text;
+    // width is free to grow with content — only the row's height has to stay put.
+    private static let captionCardHeight: CGFloat = 60
+    private static let captionCardMinWidth: CGFloat = 190
 
-            TextField("Enter your meme text", text: $customCaption)
-                .font(.subheadline.weight(useCustomCaption ? .semibold : .medium))
+    private func captionCard(_ caption: String) -> some View {
+        let isSelected = selectedCaption == caption
+        return Button {
+            selectedCaption = caption
+        } label: {
+            Text(caption)
+                .font(BrandTheme.displayFont(size: 15))
+                .multilineTextAlignment(.leading)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
                 .foregroundStyle(BrandTheme.ink)
-                .textInputAutocapitalization(.characters)
+                .frame(minWidth: Self.captionCardMinWidth, alignment: .leading)
+                .frame(height: Self.captionCardHeight, alignment: .leading)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
-                        .fill(useCustomCaption ? BrandTheme.accentSoft : BrandTheme.surface)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(isSelected ? BrandTheme.lime : BrandTheme.surface)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
-                        .stroke(useCustomCaption ? BrandTheme.accent : BrandTheme.border, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(BrandTheme.ink, lineWidth: 2)
                 )
-                .onChange(of: customCaption) { _, newValue in
-                    let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmed.isEmpty {
-                        useCustomCaption = true
-                        selectedCaption = nil
-                    } else if useCustomCaption {
-                        useCustomCaption = false
-                    }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Same fixed height as `captionCard` — a slot that's still loading must be exactly as tall as
+    /// its real card will be, or the deck's height shifts the moment it arrives. Width doesn't need
+    /// to match since a loading slot has no content to size around.
+    private var skeletonCard: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(BrandTheme.skeleton)
+            .frame(width: Self.captionCardMinWidth, height: Self.captionCardHeight)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(BrandTheme.ink, lineWidth: 2)
+            )
+            .overlay {
+                ShimmerSweep()
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var steerRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("STEER IT — OPTIONAL")
+                .font(BrandTheme.bodyFont(size: 10, weight: .bold))
+                .tracking(0.6)
+                .foregroundStyle(BrandTheme.hint)
+
+            HStack(spacing: 10) {
+                TextField("e.g. make it about Mondays", text: $steeringText)
+                    .font(BrandTheme.bodyFont(size: 14))
+                    .padding(.horizontal, 14)
+                    .frame(height: 50)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(BrandTheme.surface)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(BrandTheme.ink, lineWidth: 2)
+                    )
+
+                Button {
+                    Task { await generateCaptions() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(BrandTheme.ink)
+                        .frame(width: 50, height: 50)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(BrandTheme.surface)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(BrandTheme.ink, lineWidth: 2)
+                        )
                 }
+                .buttonStyle(.plain)
+                .disabled(isLoading || image == nil)
+                .accessibilityLabel("Regenerate captions")
+            }
         }
     }
 
-    private var createMemeButton: some View {
-        Button {
-            createMeme()
-        } label: {
-            Text("Next: Position Text")
-                .frame(maxWidth: .infinity)
+    // MARK: - Write my own mode
+
+    private var writeMyOwnSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("YOUR CAPTION")
+                .font(BrandTheme.bodyFont(size: 10, weight: .bold))
+                .tracking(0.6)
+                .foregroundStyle(BrandTheme.hint)
+
+            TextField("Fine. Write it yourself.", text: $customCaption)
+                .font(BrandTheme.displayFont(size: 17))
+                .textInputAutocapitalization(.characters)
+                .foregroundStyle(BrandTheme.ink)
+                .padding(.horizontal, 14)
+                .frame(height: 50)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(BrandTheme.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(BrandTheme.ink, lineWidth: 2)
+                )
         }
-        .buttonStyle(PrimaryBrandButtonStyle())
-        .disabled(activeCaption == nil || image == nil)
     }
+
+    // MARK: - Bottom bar
+
+    private var bottomBar: some View {
+        let hasCaption = activeCaption != nil
+
+        return VStack(spacing: 0) {
+            Rectangle()
+                .fill(BrandTheme.ink)
+                .frame(height: 2)
+
+            Button {
+                if let activeCaption {
+                    path.append(AppRoute.editor(caption: activeCaption, photo: currentPhoto))
+                } else {
+                    showToast("Pick a caption first.")
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("PLACE THE TEXT")
+                    Image(systemName: "arrow.right")
+                }
+                .frame(maxWidth: .infinity)
+                .font(BrandTheme.displayFont(size: 17))
+                .textCase(.uppercase)
+                .foregroundStyle(hasCaption ? .white : BrandTheme.hint)
+                .padding(.vertical, 16)
+                .background {
+                    RoundedRectangle(cornerRadius: BrandTheme.cornerRadius)
+                        .fill(hasCaption ? BrandTheme.orange : BrandTheme.skeleton)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: BrandTheme.cornerRadius)
+                                .stroke(BrandTheme.ink, lineWidth: 2)
+                        )
+                        .compositingGroup()
+                        .shadow(
+                            color: hasCaption ? BrandTheme.ink : .clear,
+                            radius: 0,
+                            x: hasCaption ? 4 : 0,
+                            y: hasCaption ? 4 : 0
+                        )
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(16)
+        }
+        .background(BrandTheme.background)
+    }
+
+    private func showToast(_ message: String) {
+        toastDismissTask?.cancel()
+        toastMessage = message
+        toastDismissTask = Task {
+            try? await Task.sleep(for: .seconds(2.4))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                if toastMessage == message {
+                    toastMessage = nil
+                }
+            }
+        }
+    }
+
+    // MARK: - Data
 
     private func replacePhoto(with image: UIImage, captured: PhotoCapture?) {
         guard let saved = try? PhotoStore.save(image, captured: captured) else { return }
         currentPhoto = saved
         resetCaptionState()
+        Task { await generateCaptions() }
     }
 
     private func resetCaptionState() {
         captions = []
         selectedCaption = nil
         customCaption = ""
-        useCustomCaption = false
+        mode = .suggestions
         hasGenerated = false
         usingFallbackCaptions = false
     }
@@ -290,7 +484,7 @@ struct CaptionView: View {
 
         isLoading = true
         usingFallbackCaptions = false
-        if !useCustomCaption {
+        if mode == .suggestions {
             selectedCaption = nil
         }
 
@@ -330,70 +524,26 @@ struct CaptionView: View {
         isLoading = false
         isRefining = false
     }
-
-    private func createMeme() {
-        guard let activeCaption else { return }
-        path.append(AppRoute.editor(caption: activeCaption, photo: currentPhoto))
-    }
 }
 
-private struct CaptionPill: View {
-    let text: String
-    let isSelected: Bool
+private struct ShimmerSweep: View {
+    @State private var offset: CGFloat = -1
 
     var body: some View {
-        Text(text)
-            .font(.subheadline.weight(isSelected ? .semibold : .medium))
-            .foregroundStyle(BrandTheme.ink)
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
-                    .fill(isSelected ? BrandTheme.accentSoft : BrandTheme.surface)
+        GeometryReader { geometry in
+            LinearGradient(
+                colors: [.clear, BrandTheme.surface.opacity(0.75), .clear],
+                startPoint: .leading,
+                endPoint: .trailing
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
-                    .stroke(isSelected ? BrandTheme.accent : BrandTheme.border, lineWidth: 1)
-            )
-    }
-}
-
-private struct CaptionSkeletonRow: View {
-    static let placeholderHeights: [CGFloat] = [44, 52, 44]
-
-    let height: CGFloat
-    @State private var shimmerOffset: CGFloat = -1
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
-            .fill(BrandTheme.border.opacity(0.35))
-            .frame(height: height)
-            .overlay {
-                GeometryReader { geometry in
-                    RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    .clear,
-                                    BrandTheme.surface.opacity(0.75),
-                                    .clear,
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: geometry.size.width * 0.45)
-                        .offset(x: shimmerOffset * geometry.size.width)
-                }
+            .frame(width: geometry.size.width * 0.5)
+            .offset(x: offset * geometry.size.width)
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
+                offset = 1.6
             }
-            .clipShape(RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous))
-            .onAppear {
-                withAnimation(.linear(duration: 1.1).repeatForever(autoreverses: false)) {
-                    shimmerOffset = 1.4
-                }
-            }
-            .accessibilityLabel("Loading caption")
+        }
+        .allowsHitTesting(false)
     }
 }

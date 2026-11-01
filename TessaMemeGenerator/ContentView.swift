@@ -24,7 +24,6 @@ struct ContentView: View {
                 }
                 .toolbar(.hidden, for: .navigationBar)
                 .toolbarBackground(.hidden, for: .navigationBar)
-                .ignoresSafeArea(edges: .top)
         }
     }
 }
@@ -48,7 +47,6 @@ struct TeebMemifyAppPreview: View {
                 }
                 .toolbar(.hidden, for: .navigationBar)
                 .toolbarBackground(.hidden, for: .navigationBar)
-                .ignoresSafeArea(edges: .top)
         }
         .tint(BrandTheme.accent)
     }

@@ -101,7 +101,7 @@ enum MemeRenderer {
         imageWidth: CGFloat,
         alignment: MemeTextAlignment
     ) -> UIFont {
-        let fontNames = ["Impact", "Arial-BoldMT", "Helvetica-Bold"]
+        let fontNames = ["Anton-Regular", "Impact", "Arial-BoldMT", "Helvetica-Bold"]
         var baseFont = UIFont.boldSystemFont(ofSize: 48)
 
         for name in fontNames {
