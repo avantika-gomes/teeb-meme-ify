@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Shared header for the Caption → Place → Done flow: back arrow, three step dashes, close.
 struct FlowHeader: View {
-    /// 1-based position in the 3-screen flow.
+    /// Which dash is current, matching Home's 01 SNAP / 02 CAPTION / 03 SEND. Captions is 2 (the
+    /// photo is already taken), Place is 3, and Done passes 4 so all three read as finished.
     let step: Int
     let onBack: () -> Void
     let onClose: () -> Void

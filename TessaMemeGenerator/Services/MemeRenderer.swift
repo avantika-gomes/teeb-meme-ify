@@ -12,48 +12,129 @@ enum MemeRenderer {
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: size))
 
-            let maxTextWidth = size.width * 0.92
-            let maxTextHeight = size.height * 0.5
+            let font = fittedFont(for: text, imageSize: size, layout: layout)
+            let style = paragraphStyle(for: layout.alignment)
+            let drawRect = textRect(text, font: font, paragraphStyle: style, imageSize: size, layout: layout)
 
-            let baseFont = memeFont(
-                for: text,
-                maxWidth: maxTextWidth,
-                maxHeight: maxTextHeight,
-                imageWidth: size.width,
-                alignment: layout.alignment
-            )
-            let font = baseFont.withSize(baseFont.pointSize * layout.fontScale)
-
-            let paragraphStyle = NSMutableParagraphStyle()
-            paragraphStyle.alignment = layout.alignment.nsTextAlignment
-            paragraphStyle.lineBreakMode = .byWordWrapping
-
-            let fillAttributes: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .foregroundColor: UIColor.white,
-                .paragraphStyle: paragraphStyle
-            ]
-
-            let attributed = NSAttributedString(string: text, attributes: fillAttributes)
-            let boundingRect = attributed.boundingRect(
-                with: CGSize(width: maxTextWidth, height: .greatestFiniteMagnitude),
-                options: [.usesLineFragmentOrigin, .usesFontLeading],
-                context: nil
-            )
-
-            let textHeight = ceil(boundingRect.height)
-            let centerX = layout.centerX * size.width
-            let centerY = layout.centerY * size.height
-
-            let drawRect = CGRect(
-                x: centerX - (maxTextWidth / 2),
-                y: centerY - (textHeight / 2),
-                width: maxTextWidth,
-                height: textHeight
-            )
-
-            drawMemeText(text, in: drawRect, font: font, paragraphStyle: paragraphStyle)
+            drawMemeText(text, in: drawRect, font: font, paragraphStyle: style)
         }
+    }
+
+    /// Point size the caption is drawn at, in the image's own coordinate space. The editor scales
+    /// this down to its on-screen frame so the live preview matches the saved meme exactly.
+    static func fittedFontSize(for caption: String, imageSize: CGSize, layout: MemeTextLayout) -> CGFloat {
+        fittedFont(for: caption.uppercased(), imageSize: imageSize, layout: layout).pointSize
+    }
+
+    /// Where the caption block is drawn at `fontSize`, in the image's own coordinate space. The
+    /// editor positions its live preview from this so placement matches the saved meme exactly.
+    static func textRect(for caption: String, fontSize: CGFloat, imageSize: CGSize, layout: MemeTextLayout) -> CGRect {
+        textRect(
+            caption.uppercased(),
+            font: baseMemeFont(ofSize: fontSize),
+            paragraphStyle: paragraphStyle(for: layout.alignment),
+            imageSize: imageSize,
+            layout: layout
+        )
+    }
+
+    /// The caption drawn exactly as `render` draws it, on a transparent layer covering its text
+    /// block plus outline, rasterized at `pixelScale` pixels per image point. The editor shows this
+    /// rather than laying the text out again in SwiftUI, whose line breaks can differ from UIKit's
+    /// when a line is close to the width limit.
+    static func textLayer(
+        for caption: String,
+        fontSize: CGFloat,
+        imageSize: CGSize,
+        layout: MemeTextLayout,
+        pixelScale: CGFloat
+    ) -> UIImage {
+        let text = caption.uppercased()
+        let font = baseMemeFont(ofSize: fontSize)
+        let style = paragraphStyle(for: layout.alignment)
+        let rect = textRect(text, font: font, paragraphStyle: style, imageSize: imageSize, layout: layout)
+        let reach = outlineOffset(for: font)
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = pixelScale
+        format.opaque = false
+
+        let size = CGSize(width: rect.width + reach * 2, height: rect.height + reach * 2)
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            let block = CGRect(x: reach, y: reach, width: rect.width, height: rect.height)
+            drawMemeText(text, in: block, font: font, paragraphStyle: style)
+        }
+    }
+
+    private static func textRect(
+        _ text: String,
+        font: UIFont,
+        paragraphStyle: NSParagraphStyle,
+        imageSize: CGSize,
+        layout: MemeTextLayout
+    ) -> CGRect {
+        let maxTextWidth = imageSize.width * 0.92
+        let bounds = (text as NSString).boundingRect(
+            with: CGSize(width: maxTextWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font, .paragraphStyle: paragraphStyle],
+            context: nil
+        )
+        let textWidth = min(ceil(bounds.width), maxTextWidth)
+        let textHeight = ceil(bounds.height)
+
+        // The stored center is where the user aimed the caption, but a tall block near an edge
+        // would be drawn partly outside the image and cut off — so keep the whole block, outline
+        // included, inside. Lines are aligned within the full-width rect, so the visible text
+        // starts this far in from its left edge.
+        let margin = outlineOffset(for: font)
+        let glyphInset: CGFloat
+        switch layout.alignment {
+        case .left: glyphInset = 0
+        case .center: glyphInset = (maxTextWidth - textWidth) / 2
+        case .right: glyphInset = maxTextWidth - textWidth
+        }
+
+        let x = clamp(
+            layout.centerX * imageSize.width - maxTextWidth / 2,
+            between: margin - glyphInset,
+            and: imageSize.width - margin - glyphInset - textWidth
+        )
+        let y = clamp(
+            layout.centerY * imageSize.height - textHeight / 2,
+            between: margin,
+            and: imageSize.height - margin - textHeight
+        )
+
+        return CGRect(x: x, y: y, width: maxTextWidth, height: textHeight)
+    }
+
+    /// Clamps into `[lower, upper]`; if the block is bigger than the image, centers it instead.
+    private static func clamp(_ value: CGFloat, between lower: CGFloat, and upper: CGFloat) -> CGFloat {
+        guard lower <= upper else { return (lower + upper) / 2 }
+        return min(max(value, lower), upper)
+    }
+
+    private static func paragraphStyle(for alignment: MemeTextAlignment) -> NSParagraphStyle {
+        let style = NSMutableParagraphStyle()
+        style.alignment = alignment.nsTextAlignment
+        style.lineBreakMode = .byWordWrapping
+        return style
+    }
+
+    private static func outlineOffset(for font: UIFont) -> CGFloat {
+        max(2, font.pointSize * 0.05)
+    }
+
+    private static func fittedFont(for text: String, imageSize: CGSize, layout: MemeTextLayout) -> UIFont {
+        let baseFont = memeFont(
+            for: text,
+            maxWidth: imageSize.width * 0.92,
+            maxHeight: imageSize.height * 0.5,
+            imageWidth: imageSize.width,
+            alignment: layout.alignment
+        )
+        return baseFont.withSize(baseFont.pointSize * layout.fontScale)
     }
 
     private static func drawMemeText(
@@ -64,12 +145,12 @@ enum MemeRenderer {
     ) {
         // Match MemeStyleText: offset black copies + white fill.
         // NSAttributedString strokeWidth causes miter spikes on bold fonts.
-        let outlineOffset = max(2, font.pointSize * 0.05)
+        let reach = outlineOffset(for: font)
         let outlineOffsets: [(CGFloat, CGFloat)] = [
-            (-outlineOffset, -outlineOffset),
-            (outlineOffset, -outlineOffset),
-            (-outlineOffset, outlineOffset),
-            (outlineOffset, outlineOffset)
+            (-reach, -reach),
+            (reach, -reach),
+            (-reach, reach),
+            (reach, reach)
         ]
 
         let outlineAttributes: [NSAttributedString.Key: Any] = [
@@ -101,19 +182,8 @@ enum MemeRenderer {
         imageWidth: CGFloat,
         alignment: MemeTextAlignment
     ) -> UIFont {
-        let fontNames = ["Anton-Regular", "Impact", "Arial-BoldMT", "Helvetica-Bold"]
-        var baseFont = UIFont.boldSystemFont(ofSize: 48)
-
-        for name in fontNames {
-            if let font = UIFont(name: name, size: 48) {
-                baseFont = font
-                break
-            }
-        }
-
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.alignment = alignment.nsTextAlignment
-        paragraphStyle.lineBreakMode = .byWordWrapping
+        let baseFont = baseMemeFont(ofSize: 48)
+        let paragraphStyle = paragraphStyle(for: alignment)
 
         let startSize = imageWidth * 0.11
         let minSize = max(24, imageWidth * 0.045)
@@ -145,5 +215,14 @@ enum MemeRenderer {
         }
 
         return bestFont
+    }
+
+    private static func baseMemeFont(ofSize size: CGFloat) -> UIFont {
+        for name in ["Anton-Regular", "Impact", "Arial-BoldMT", "Helvetica-Bold"] {
+            if let font = UIFont(name: name, size: size) {
+                return font
+            }
+        }
+        return .boldSystemFont(ofSize: size)
     }
 }

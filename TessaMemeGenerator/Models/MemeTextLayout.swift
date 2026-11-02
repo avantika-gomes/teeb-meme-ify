@@ -30,11 +30,11 @@ enum MemeTextAlignment: String, Hashable, Codable, CaseIterable {
         }
     }
 
-    var iconName: String {
+    var horizontalAlignment: HorizontalAlignment {
         switch self {
-        case .left: "text.alignleft"
-        case .center: "text.aligncenter"
-        case .right: "text.alignright"
+        case .left: .leading
+        case .center: .center
+        case .right: .trailing
         }
     }
 }

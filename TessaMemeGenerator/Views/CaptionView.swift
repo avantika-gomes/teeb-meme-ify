@@ -58,7 +58,7 @@ struct CaptionView: View {
     var body: some View {
         VStack(spacing: 0) {
             FlowHeader(
-                step: 1,
+                step: 2,
                 onBack: { path.removeLast() },
                 onClose: { path = NavigationPath() }
             )

@@ -67,7 +67,7 @@ struct PrimaryBrandButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.subheadline.weight(.bold))
+            .font(BrandTheme.displayFont(size: 17))
             .textCase(.uppercase)
             .foregroundStyle(isEnabled ? .white : BrandTheme.hint)
             .padding(.vertical, 16)
@@ -99,7 +99,7 @@ struct SecondaryBrandButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.subheadline.weight(.bold))
+            .font(BrandTheme.displayFont(size: 17))
             .textCase(.uppercase)
             .foregroundStyle(isEnabled ? BrandTheme.ink : BrandTheme.hint)
             .padding(.vertical, 16)
