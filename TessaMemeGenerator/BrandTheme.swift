@@ -14,15 +14,8 @@ enum BrandTheme {
     static let skeleton = Color(red: 0.93725, green: 0.93725, blue: 0.91373)    // #EFEFE9
     static let skeletonStrong = Color(red: 0.86275, green: 0.86275, blue: 0.83137) // #DCDCD4
 
-    // Pre-redesign screens still read these three names; they now resolve into Fetch's palette.
-    // Drop them once every screen has migrated to orange/lime/ink directly.
-    static let accent = orange
-    static let accentSoft = lime
-    static let border = ink
-
+    /// Button corner radius (HANDOFF §2.1: buttons 12, tiles/cards 14, controls 10).
     static let cornerRadius: CGFloat = 12
-    static let photoCornerRadius: CGFloat = 12
-    static let appName = "Fetch"
     static let tagline = "Good dog, bad jokes"
 
     enum BodyWeight {
@@ -114,18 +107,7 @@ struct SecondaryBrandButtonStyle: ButtonStyle {
     }
 }
 
-private struct BrandScreenBackground: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .background(BrandTheme.background.ignoresSafeArea())
-    }
-}
-
 extension View {
-    func brandScreen() -> some View {
-        modifier(BrandScreenBackground())
-    }
-
     /// Confirmation toast (handoff/HANDOFF.md §2.3). Setting `message` shows it; it dismisses
     /// itself after 2.6s. `barHeight` lifts it above a screen's bottom action bar.
     func brandToast(message: Binding<String?>, above barHeight: CGFloat = 0) -> some View {

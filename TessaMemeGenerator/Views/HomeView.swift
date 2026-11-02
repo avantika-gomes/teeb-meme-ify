@@ -332,8 +332,6 @@ struct HomeView: View {
     }
 }
 
-#if DEBUG
-#Preview("Teeb Meme-ify") {
-    TeebMemifyAppPreview()
+#Preview("Home") {
+    ContentView()
 }
-#endif

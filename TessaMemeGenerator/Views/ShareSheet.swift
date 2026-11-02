@@ -45,7 +45,7 @@ final class ShareImageActivityItem: NSObject, UIActivityItemSource {
     private func writeTemporaryPNG() -> URL? {
         guard let data = image.pngData() else { return nil }
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("teeb-meme-\(UUID().uuidString).png")
+            .appendingPathComponent("fetch-meme-\(UUID().uuidString).png")
         do {
             try data.write(to: url, options: .atomic)
             temporaryFileURL = url
