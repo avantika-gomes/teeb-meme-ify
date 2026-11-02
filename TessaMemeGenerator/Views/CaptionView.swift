@@ -19,7 +19,6 @@ struct CaptionView: View {
     @State private var showCamera = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var toastMessage: String?
-    @State private var toastDismissTask: Task<Void, Never>?
 
     private let bottomBarHeight: CGFloat = 84
 
@@ -90,7 +89,7 @@ struct CaptionView: View {
             bottomBar
         }
         .background(BrandTheme.background.ignoresSafeArea())
-        .brandActionBarToast(message: $toastMessage, above: bottomBarHeight)
+        .brandToast(message: $toastMessage, above: bottomBarHeight)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
@@ -408,7 +407,7 @@ struct CaptionView: View {
                 if let activeCaption {
                     path.append(AppRoute.editor(caption: activeCaption, photo: currentPhoto))
                 } else {
-                    showToast("Pick a caption first.")
+                    toastMessage = "Pick a caption first."
                 }
             } label: {
                 HStack(spacing: 6) {
@@ -440,20 +439,6 @@ struct CaptionView: View {
             .padding(16)
         }
         .background(BrandTheme.background)
-    }
-
-    private func showToast(_ message: String) {
-        toastDismissTask?.cancel()
-        toastMessage = message
-        toastDismissTask = Task {
-            try? await Task.sleep(for: .seconds(2.4))
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                if toastMessage == message {
-                    toastMessage = nil
-                }
-            }
-        }
     }
 
     // MARK: - Data

@@ -9,6 +9,7 @@ struct HomeView: View {
     @State private var showCamera = false
     @State private var errorMessage: String?
     @State private var shareItem: ShareImageItem?
+    @State private var toastMessage: String?
 
     private let tileSpacing: CGFloat = 12
     private let gridSpacing: CGFloat = 10
@@ -30,6 +31,7 @@ struct HomeView: View {
             .padding(16)
         }
         .background(BrandTheme.background.ignoresSafeArea())
+        .brandToast(message: $toastMessage)
         .onAppear {
             reloadRecentsIfNeeded()
         }
@@ -53,6 +55,9 @@ struct HomeView: View {
         .sheet(item: $shareItem) { item in
             ShareSheet(
                 items: [item.image],
+                onComplete: {
+                    toastMessage = "Shared."
+                },
                 onDismiss: {
                     shareItem = nil
                 }

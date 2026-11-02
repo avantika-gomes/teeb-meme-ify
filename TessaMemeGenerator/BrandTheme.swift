@@ -126,43 +126,53 @@ extension View {
         modifier(BrandScreenBackground())
     }
 
-    func brandActionBarToast(message: Binding<String?>, above barHeight: CGFloat) -> some View {
+    /// Confirmation toast (handoff/HANDOFF.md §2.3). Setting `message` shows it; it dismisses
+    /// itself after 2.6s. `barHeight` lifts it above a screen's bottom action bar.
+    func brandToast(message: Binding<String?>, above barHeight: CGFloat = 0) -> some View {
         overlay(alignment: .bottom) {
             if let text = message.wrappedValue {
-                BrandFlatToast(message: text)
+                BrandToast(message: text)
                     .padding(.horizontal, 16)
-                    .padding(.bottom, barHeight + 8)
+                    .padding(.bottom, barHeight + 24)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.86), value: message.wrappedValue)
+        .task(id: message.wrappedValue) {
+            guard message.wrappedValue != nil else { return }
+            try? await Task.sleep(for: .seconds(2.6))
+            guard !Task.isCancelled else { return }
+            message.wrappedValue = nil
+        }
     }
 }
 
-struct BrandFlatToast: View {
+struct BrandToast: View {
     let message: String
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.subheadline)
-                .foregroundStyle(BrandTheme.orange)
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 10, weight: .heavy))
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(BrandTheme.orange))
+                .overlay(Circle().stroke(BrandTheme.ink, lineWidth: 2))
 
             Text(message)
-                .font(.subheadline.weight(.medium))
+                .font(BrandTheme.bodyFont(size: 12, weight: .medium))
                 .foregroundStyle(BrandTheme.ink)
-
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background {
-            RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
+        .padding(.leading, 10)
+        .padding(.trailing, 16)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(BrandTheme.surface)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(BrandTheme.ink, lineWidth: 2)
-        }
+        )
     }
 }

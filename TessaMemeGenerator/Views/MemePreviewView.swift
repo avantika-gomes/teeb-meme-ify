@@ -10,53 +10,56 @@ struct MemePreviewView: View {
 
     @State private var memeImage: UIImage?
     @State private var didPersistMeme = false
-    @State private var confirmationMessage: String?
+    @State private var toastMessage: String?
     @State private var errorMessage: String?
     @State private var showSaveError = false
     @State private var shareItem: ShareImageItem?
-    @State private var confirmationDismissTask: Task<Void, Never>?
-
-    private let actionBarHeight: CGFloat = 72
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 0) {
-                    if let memeImage {
-                        Image(uiImage: memeImage)
-                            .resizable()
-                            .scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius))
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
-                            .padding(.bottom, 16)
-                    } else {
-                        ProgressView("Rendering meme...")
-                            .frame(maxWidth: .infinity, minHeight: 240)
-                    }
-                }
-            }
-            .scrollContentBackground(.hidden)
+            FlowHeader(
+                step: 4,
+                onBack: { path.removeLast() },
+                onClose: { path = NavigationPath() }
+            )
 
-            previewActionBar
-        }
-        .brandScreen()
-        .brandActionBarToast(message: $confirmationMessage, above: actionBarHeight)
-        .navigationTitle("Your Meme")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(BrandTheme.background, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    path = NavigationPath()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.body.weight(.semibold))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("THERE. A MEME.")
+                        .font(BrandTheme.displayFont(size: 26))
                         .foregroundStyle(BrandTheme.ink)
+
+                    memeFrame
+
+                    HStack(spacing: 10) {
+                        Button(action: saveToPhotos) {
+                            Text("Save")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(PrimaryBrandButtonStyle())
+
+                        Button {
+                            if let memeImage {
+                                shareItem = ShareImageItem(image: memeImage)
+                            }
+                        } label: {
+                            Text("Share")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(SecondaryBrandButtonStyle())
+                    }
+                    .disabled(memeImage == nil)
+
+                    startOverLink
+                        .frame(maxWidth: .infinity)
                 }
-                .accessibilityLabel("Close")
+                .padding(16)
             }
         }
+        .background(BrandTheme.background.ignoresSafeArea())
+        .brandToast(message: $toastMessage)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             renderMeme()
         }
@@ -64,7 +67,7 @@ struct MemePreviewView: View {
             ShareSheet(
                 items: [item.image],
                 onComplete: {
-                    showConfirmation("Shared!")
+                    toastMessage = "Shared — and added to your greatest hits."
                 },
                 onDismiss: {
                     shareItem = nil
@@ -78,51 +81,49 @@ struct MemePreviewView: View {
         }
     }
 
-    private var previewActionBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-                .overlay(BrandTheme.border)
-
-            HStack(spacing: 12) {
-                Button(action: saveToPhotos) {
-                    Text("Save")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(PrimaryBrandButtonStyle())
-                .disabled(memeImage == nil)
-
-                Button {
-                    if let memeImage {
-                        shareItem = ShareImageItem(image: memeImage)
-                    }
-                } label: {
-                    Text("Share")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(SecondaryBrandButtonStyle())
-                .disabled(memeImage == nil)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 12)
+    @ViewBuilder
+    private var memeFrame: some View {
+        // Whole meme, never cropped, but height-capped so tall photos don't push Save/Share
+        // down under the toast.
+        if let memeImage {
+            Image(uiImage: memeImage)
+                .resizable()
+                .scaledToFit()
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(BrandTheme.ink, lineWidth: 2)
+                )
+                .frame(maxWidth: .infinity, maxHeight: Self.maxMemeHeight)
+        } else {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(BrandTheme.skeleton)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(BrandTheme.ink, lineWidth: 2)
+                )
+                .frame(height: Self.maxMemeHeight)
         }
-        .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial)
-        .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func showConfirmation(_ message: String) {
-        confirmationDismissTask?.cancel()
-        confirmationMessage = message
-        confirmationDismissTask = Task {
-            try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                if confirmationMessage == message {
-                    confirmationMessage = nil
-                }
+    private static let maxMemeHeight: CGFloat = 420
+
+    private var startOverLink: some View {
+        Button {
+            path = NavigationPath()
+        } label: {
+            VStack(spacing: 6) {
+                Text("Start over")
+                    .font(BrandTheme.bodyFont(size: 13, weight: .medium))
+                    .foregroundStyle(BrandTheme.muted)
+                Capsule()
+                    .fill(BrandTheme.skeletonStrong)
+                    .frame(width: 66, height: 2)
             }
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
     private func renderMeme() {
@@ -152,7 +153,7 @@ struct MemePreviewView: View {
             }) { success, error in
                 DispatchQueue.main.async {
                     if success {
-                        showConfirmation("Saved to Photos!")
+                        toastMessage = "Saved to your photos."
                     } else {
                         errorMessage = error?.localizedDescription ?? "Save failed."
                         showSaveError = true
