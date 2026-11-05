@@ -58,9 +58,12 @@ struct CameraPicker: UIViewControllerRepresentable {
                 return
             }
 
+            // Shrink before the delay so the full-size capture isn't held any longer than needed.
+            let prepared = image.preparedForStorage()
+
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(300))
-                onImagePicked(image.normalizedUp())
+                onImagePicked(prepared)
             }
         }
 
@@ -83,17 +86,5 @@ final class CameraContainerViewController: UIViewController {
         picker.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(picker.view)
         picker.didMove(toParent: self)
-    }
-}
-
-private extension UIImage {
-    func normalizedUp() -> UIImage {
-        guard imageOrientation != .up else { return self }
-
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = scale
-        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
-            draw(in: CGRect(origin: .zero, size: size))
-        }
     }
 }
