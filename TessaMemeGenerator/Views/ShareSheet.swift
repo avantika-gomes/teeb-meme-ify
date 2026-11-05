@@ -29,7 +29,7 @@ final class ShareImageActivityItem: NSObject, UIActivityItemSource {
         _ activityViewController: UIActivityViewController,
         itemForActivityType activityType: UIActivity.ActivityType?
     ) -> Any? {
-        if let url = writeTemporaryPNG() {
+        if let url = writeTemporaryJPEG() {
             return url
         }
         return image
@@ -42,10 +42,12 @@ final class ShareImageActivityItem: NSObject, UIActivityItemSource {
         return metadata
     }
 
-    private func writeTemporaryPNG() -> URL? {
-        guard let data = image.pngData() else { return nil }
+    /// JPEG rather than PNG: a lossless photo is several times the size to encode and send, for no
+    /// visible difference.
+    private func writeTemporaryJPEG() -> URL? {
+        guard let data = image.jpegData(compressionQuality: 0.9) else { return nil }
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("fetch-meme-\(UUID().uuidString).png")
+            .appendingPathComponent("fetch-meme-\(UUID().uuidString).jpg")
         do {
             try data.write(to: url, options: .atomic)
             temporaryFileURL = url

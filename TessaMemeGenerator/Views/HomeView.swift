@@ -53,15 +53,16 @@ struct HomeView: View {
             guard let newItem else { return }
             Task {
                 do {
+                    // Downsampled straight from the data so the full-size photo is never decoded.
                     guard let data = try await newItem.loadTransferable(type: Data.self),
-                          let image = UIImage(data: data) else {
+                          let image = ImageDownsampler.downsample(data: data) else {
                         await MainActor.run {
                             errorMessage = "Could not load that photo."
                             selectedPhotoItem = nil
                         }
                         return
                     }
-                    // Read EXIF from the original data; UIImage has already dropped it.
+                    // Read EXIF from the original data; the downsampled image has already dropped it.
                     let captured = PhotoMetadata.capture(from: data)
                     await MainActor.run {
                         handleNewImage(image, captured: captured)
@@ -255,13 +256,7 @@ struct HomeView: View {
             Color.clear
                 .aspectRatio(1, contentMode: .fit)
                 .overlay {
-                    if let image = MemeStore.loadImage(for: meme) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        BrandTheme.skeleton
-                    }
+                    MemeThumbnail(meme: meme)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(alignment: .bottomTrailing) {
@@ -333,6 +328,61 @@ struct HomeView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+/// A grid tile's image, decoded off the main thread at tile size. Saved memes can be full camera
+/// resolution, and decoding every one of those at full size is what ran the app out of memory.
+private struct MemeThumbnail: View {
+    let meme: SavedMeme
+
+    @Environment(\.displayScale) private var displayScale
+    @State private var image: UIImage?
+
+    /// Memes never change once saved, so a thumbnail stays valid for as long as it's cached.
+    private static let cache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.totalCostLimit = 64 * 1024 * 1024
+        return cache
+    }()
+
+    var body: some View {
+        GeometryReader { geometry in
+            Group {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    BrandTheme.skeleton
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .task(id: geometry.size.width) {
+                await loadThumbnail(side: max(geometry.size.width, geometry.size.height))
+            }
+        }
+    }
+
+    private func loadThumbnail(side: CGFloat) async {
+        guard side > 0 else { return }
+        let pixelSize = (side * displayScale).rounded(.up)
+        let key = "\(meme.fileName)@\(Int(pixelSize))" as NSString
+
+        if let cached = Self.cache.object(forKey: key) {
+            image = cached
+            return
+        }
+
+        let url = meme.fileURL
+        let thumbnail = await Task.detached(priority: .userInitiated) {
+            ImageDownsampler.thumbnail(contentsOf: url, filling: pixelSize)
+        }.value
+
+        guard let thumbnail, !Task.isCancelled else { return }
+        let cost = thumbnail.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+        Self.cache.setObject(thumbnail, forKey: key, cost: cost)
+        image = thumbnail
     }
 }
 

@@ -57,9 +57,9 @@ struct CaptionView: View {
         }
     }
 
-    private var image: UIImage? {
-        PhotoStore.loadImage(for: currentPhoto)
-    }
+    /// Loaded once when the screen appears rather than in `body`, which re-runs on every keystroke
+    /// and would read and decode the whole file each time.
+    @State private var image: UIImage?
 
     private var activeCaption: String? {
         switch mode {
@@ -110,6 +110,9 @@ struct CaptionView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
+            if image == nil {
+                image = PhotoStore.loadImage(for: currentPhoto)
+            }
             if !hasGenerated {
                 startCaptionRun()
             }
@@ -127,11 +130,12 @@ struct CaptionView: View {
             guard let newItem else { return }
             Task {
                 do {
+                    // Downsampled straight from the data so the full-size photo is never decoded.
                     guard let data = try await newItem.loadTransferable(type: Data.self),
-                          let image = UIImage(data: data) else {
+                          let image = ImageDownsampler.downsample(data: data) else {
                         return
                     }
-                    // Read EXIF from the original data; UIImage has already dropped it.
+                    // Read EXIF from the original data; the downsampled image has already dropped it.
                     let captured = PhotoMetadata.capture(from: data)
                     await MainActor.run {
                         replacePhoto(with: image, captured: captured)
@@ -489,6 +493,8 @@ struct CaptionView: View {
     private func replacePhoto(with image: UIImage, captured: PhotoCapture?) {
         guard let saved = try? PhotoStore.save(image, captured: captured) else { return }
         currentPhoto = saved
+        // Already upright and downsampled, so no need to read back what was just saved.
+        self.image = image
         resetCaptionState()
         startCaptionRun()
     }

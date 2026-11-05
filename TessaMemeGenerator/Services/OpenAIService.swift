@@ -198,7 +198,12 @@ struct OpenAIService {
         let scale = maxWidth / image.size.width
         let newSize = CGSize(width: maxWidth, height: image.size.height * scale)
 
-        let renderer = UIGraphicsImageRenderer(size: newSize)
+        // Scale 1, or the renderer uses the screen's (3x) and the "1024 px" image is 3072 px wide.
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.preferredRange = .standard
+
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: newSize))
         }
