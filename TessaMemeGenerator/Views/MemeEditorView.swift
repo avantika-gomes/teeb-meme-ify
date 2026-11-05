@@ -21,9 +21,10 @@ struct MemeEditorView: View {
     private static let scaleRange: ClosedRange<CGFloat> = 0.4...2.2
     private static let positionRange: ClosedRange<CGFloat> = 0.08...0.92
 
-    private var image: UIImage? {
-        PhotoStore.loadImage(for: photo)
-    }
+    /// Loaded once when the screen appears rather than in `body`, which re-runs on every drag frame
+    /// and would read and decode the whole file each time. MemePreviewView renders from the same
+    /// call, so the live preview's image coordinates match the saved meme's.
+    @State private var image: UIImage?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -80,6 +81,9 @@ struct MemeEditorView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
+            if image == nil {
+                image = PhotoStore.loadImage(for: photo)
+            }
             layout = clampedLayout(layout)
             pinchBaseScale = layout.fontScale
             refitFont()

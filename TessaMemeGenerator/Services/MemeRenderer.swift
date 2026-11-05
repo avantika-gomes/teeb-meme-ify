@@ -7,6 +7,8 @@ enum MemeRenderer {
 
         let format = UIGraphicsImageRendererFormat()
         format.scale = image.scale
+        // The default on wide-color screens is a 16-bit-per-channel buffer, twice the memory.
+        format.preferredRange = .standard
 
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
         return renderer.image { _ in

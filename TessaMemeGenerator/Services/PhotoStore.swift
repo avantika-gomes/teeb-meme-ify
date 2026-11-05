@@ -16,7 +16,8 @@ enum PhotoStore {
         let id = UUID()
         let fileName = "\(id.uuidString).jpg"
         let fileURL = photosDirectory.appendingPathComponent(fileName)
-        let prepared = image.normalizedForSaving()
+        // Callers normally hand in an already upright, downsampled image, making this a no-op.
+        let prepared = image.preparedForStorage()
 
         guard let data = prepared.jpegData(compressionQuality: 0.85) else {
             throw PhotoStoreError.encodingFailed
@@ -113,8 +114,11 @@ enum PhotoStore {
             .sorted { $0.createdAt > $1.createdAt }
     }
 
+    /// The photo, capped at the import size. New photos are saved at that size already; this also
+    /// keeps ones saved full-size by earlier builds from decoding at 100+ MB. The editor and the
+    /// final render both load through here, so they always agree on the image's dimensions.
     static func loadImage(for photo: SavedPhoto) -> UIImage? {
-        UIImage(contentsOfFile: photo.fileURL.path)
+        ImageDownsampler.downsample(contentsOf: photo.fileURL)
     }
 
     private struct CaptureRecord: Codable {
@@ -151,19 +155,6 @@ enum PhotoStore {
     private static func readCaptureIndex() -> [String: CaptureRecord] {
         guard let data = try? Data(contentsOf: captureIndexURL) else { return [:] }
         return (try? JSONDecoder().decode([String: CaptureRecord].self, from: data)) ?? [:]
-    }
-}
-
-private extension UIImage {
-    func normalizedForSaving() -> UIImage {
-        if cgImage == nil || imageOrientation != .up {
-            let format = UIGraphicsImageRendererFormat()
-            format.scale = scale
-            return UIGraphicsImageRenderer(size: size, format: format).image { _ in
-                draw(in: CGRect(origin: .zero, size: size))
-            }
-        }
-        return self
     }
 }
 

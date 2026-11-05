@@ -15,6 +15,7 @@
 		A10000000000000000000090 /* PhotoMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000091 /* PhotoMetadata.swift */; };
 		A10000000000000000000092 /* CaptionContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000093 /* CaptionContext.swift */; };
 		A10000000000000000000094 /* PlaceLookup.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000095 /* PlaceLookup.swift */; };
+		A10000000000000000000096 /* ImageDownsampler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000097 /* ImageDownsampler.swift */; };
 		A10000000000000000000015 /* OpenAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000025 /* OpenAIService.swift */; };
 		A10000000000000000000016 /* MemeRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* MemeRenderer.swift */; };
 		A10000000000000000000017 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000027 /* HomeView.swift */; };
@@ -48,6 +49,7 @@
 		A10000000000000000000091 /* PhotoMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoMetadata.swift; sourceTree = "<group>"; };
 		A10000000000000000000093 /* CaptionContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptionContext.swift; sourceTree = "<group>"; };
 		A10000000000000000000095 /* PlaceLookup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceLookup.swift; sourceTree = "<group>"; };
+		A10000000000000000000097 /* ImageDownsampler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageDownsampler.swift; sourceTree = "<group>"; };
 		A10000000000000000000025 /* OpenAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIService.swift; sourceTree = "<group>"; };
 		A10000000000000000000026 /* MemeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemeRenderer.swift; sourceTree = "<group>"; };
 		A10000000000000000000027 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -135,6 +137,7 @@
 				A10000000000000000000024 /* PhotoStore.swift */,
 				A10000000000000000000091 /* PhotoMetadata.swift */,
 				A10000000000000000000095 /* PlaceLookup.swift */,
+				A10000000000000000000097 /* ImageDownsampler.swift */,
 				A10000000000000000000039 /* MemeStore.swift */,
 				A10000000000000000000025 /* OpenAIService.swift */,
 				A10000000000000000000026 /* MemeRenderer.swift */,
@@ -261,6 +264,7 @@
 				A10000000000000000000090 /* PhotoMetadata.swift in Sources */,
 				A10000000000000000000092 /* CaptionContext.swift in Sources */,
 				A10000000000000000000094 /* PlaceLookup.swift in Sources */,
+				A10000000000000000000096 /* ImageDownsampler.swift in Sources */,
 				A10000000000000000000038 /* MemeStore.swift in Sources */,
 				A10000000000000000000015 /* OpenAIService.swift in Sources */,
 				A10000000000000000000016 /* MemeRenderer.swift in Sources */,
