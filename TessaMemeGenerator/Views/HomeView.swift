@@ -5,105 +5,33 @@ import UIKit
 struct HomeView: View {
     @Binding var path: NavigationPath
     @State private var recentMemes: [SavedMeme] = []
-    @State private var recentPhotos: [SavedPhoto] = []
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showCamera = false
     @State private var errorMessage: String?
     @State private var shareItem: ShareImageItem?
+    @State private var toastMessage: String?
 
-    private static let mastheadAspectRatio: CGFloat = 768.0 / 599.0
-    private static let mastheadFadeOverlap: CGFloat = 64
-    private let memeThumbSize: CGFloat = 108
-    private let photoThumbSize: CGFloat = 88
+    private let tileSpacing: CGFloat = 12
+    private let gridSpacing: CGFloat = 10
 
     var body: some View {
-        GeometryReader { geo in
-            let width = geo.size.width
-            let topInset = geo.safeAreaInsets.top
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                brandBar
+                captureTiles
+                greatestHitsSection
 
-            VStack(spacing: 0) {
-                homeMasthead(width: width, topInset: topInset)
-                    .padding(.bottom, -Self.mastheadFadeOverlap)
-
-                ScrollView {
-                    VStack(spacing: 24) {
-                        VStack(spacing: 12) {
-                            if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                                Button {
-                                    showCamera = true
-                                } label: {
-                                    Text("Take Photo")
-                                        .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(PrimaryBrandButtonStyle())
-                            }
-
-                            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                                Text("Choose Photo")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(SecondaryBrandButtonStyle())
-                        }
-
-                        if !recentMemes.isEmpty {
-                            carouselSection(
-                                title: "Recent Memes",
-                                subtitle: "Tap to share again"
-                            ) {
-                                ForEach(recentMemes) { meme in
-                                    Button {
-                                        if let image = MemeStore.loadImage(for: meme) {
-                                            shareItem = ShareImageItem(image: image)
-                                        }
-                                    } label: {
-                                        memeThumb(for: meme)
-                                    }
-                                }
-                            }
-                        }
-
-                        if !recentPhotos.isEmpty {
-                            carouselSection(
-                                title: "Recent Photos",
-                                subtitle: "Tap to caption again"
-                            ) {
-                                ForEach(recentPhotos) { photo in
-                                    Button {
-                                        path.append(AppRoute.captions(photo))
-                                    } label: {
-                                        if let image = PhotoStore.loadImage(for: photo) {
-                                            Image(uiImage: image)
-                                                .resizable()
-                                                .scaledToFill()
-                                                .frame(width: photoThumbSize, height: photoThumbSize)
-                                                .clipShape(RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius))
-                                                .overlay {
-                                                    RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius)
-                                                        .stroke(BrandTheme.border, lineWidth: 1)
-                                                }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if let errorMessage {
-                            Text(errorMessage)
-                                .font(.footnote)
-                                .foregroundStyle(.red)
-                                .multilineTextAlignment(.center)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 24)
-                    .padding(.bottom)
-                    .frame(width: width)
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(BrandTheme.bodyFont(size: 12))
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.leading)
                 }
-                .scrollContentBackground(.hidden)
             }
-            .frame(width: width, height: geo.size.height, alignment: .top)
+            .padding(16)
         }
-        .background(BrandTheme.background)
+        .background(BrandTheme.background.ignoresSafeArea())
+        .brandToast(message: $toastMessage)
         .onAppear {
             reloadRecentsIfNeeded()
         }
@@ -127,6 +55,9 @@ struct HomeView: View {
         .sheet(item: $shareItem) { item in
             ShareSheet(
                 items: [item.image],
+                onComplete: {
+                    toastMessage = "Shared."
+                },
                 onDismiss: {
                     shareItem = nil
                 }
@@ -162,119 +93,219 @@ struct HomeView: View {
         }
     }
 
-    /// Full-width cropped banner; `scaledToFill` preserves aspect ratio (no stretch).
-    private func homeMasthead(width: CGFloat, topInset: CGFloat) -> some View {
-        let imageHeight = width / Self.mastheadAspectRatio
-        let fadeHeight = Self.mastheadFadeOverlap
-        let totalHeight = imageHeight + fadeHeight
+    // MARK: - Brand bar
 
-        return VStack(spacing: 0) {
-            ZStack(alignment: .bottomLeading) {
-                Image("TessaMasthead")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: width, height: imageHeight + topInset)
-                    .frame(width: width, height: imageHeight, alignment: .top)
-                    .clipped()
-                    .overlay {
-                        BrandTheme.background.opacity(0.14)
-                    }
-
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: BrandTheme.background.opacity(0.08), location: 0.3),
-                        .init(color: BrandTheme.background.opacity(0.28), location: 0.55),
-                        .init(color: BrandTheme.background.opacity(0.58), location: 0.78),
-                        .init(color: BrandTheme.background.opacity(0.88), location: 0.94),
-                        .init(color: BrandTheme.background, location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(width: width, height: imageHeight * 0.62)
-                .frame(width: width, height: imageHeight, alignment: .bottom)
-                .allowsHitTesting(false)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(BrandTheme.appName)
-                        .font(BrandTheme.displayFont(size: 20))
-                        .foregroundStyle(BrandTheme.ink)
-
-                    Text(BrandTheme.tagline)
-                        .font(.subheadline)
-                        .foregroundStyle(BrandTheme.muted)
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
-            }
-            .frame(width: width, height: imageHeight)
-
-            LinearGradient(
-                colors: [
-                    BrandTheme.background.opacity(0.95),
-                    BrandTheme.background,
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(width: width, height: fadeHeight)
-            .allowsHitTesting(false)
-        }
-        .frame(width: width, height: totalHeight, alignment: .top)
-    }
-
-    private func carouselSection<Content: View>(
-        title: String,
-        subtitle: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var brandBar: some View {
+        HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(BrandTheme.ink)
-
-                Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(BrandTheme.muted)
+                Text("FETCH")
+                    .font(BrandTheme.displayFont(size: 34))
+                Text(BrandTheme.tagline.uppercased())
+                    .font(BrandTheme.bodyFont(size: 10, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundStyle(BrandTheme.ink.opacity(0.65))
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    content()
-                }
+            Spacer(minLength: 12)
+
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("01 SNAP")
+                Text("02 CAPTION")
+                Text("03 SEND")
             }
+            .font(BrandTheme.bodyFont(size: 11, weight: .bold))
+            .tracking(0.6)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .foregroundStyle(BrandTheme.ink)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(BrandTheme.lime)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(BrandTheme.ink, lineWidth: 2)
+        )
     }
 
-    private func memeThumb(for meme: SavedMeme) -> some View {
-        ZStack(alignment: .bottomTrailing) {
-            if let image = MemeStore.loadImage(for: meme) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: memeThumbSize, height: memeThumbSize)
-                    .clipShape(RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: BrandTheme.photoCornerRadius)
-                            .stroke(BrandTheme.border, lineWidth: 1)
+    // MARK: - Capture tiles
+
+    @ViewBuilder
+    private var captureTiles: some View {
+        HStack(spacing: tileSpacing) {
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                cameraTile
+            }
+            libraryTile
+        }
+    }
+
+    private var cameraTile: some View {
+        Button {
+            showCamera = true
+        } label: {
+            captureTileContent(fill: BrandTheme.ink, labelColor: BrandTheme.lime, hasShadow: true) {
+                ZStack {
+                    Circle()
+                        .stroke(BrandTheme.lime, lineWidth: 3)
+                        .frame(width: 44, height: 44)
+                    Circle()
+                        .fill(BrandTheme.lime)
+                        .frame(width: 14, height: 14)
+                }
+            } label: {
+                Text("CAMERA")
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Take a photo")
+    }
+
+    private var libraryTile: some View {
+        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+            captureTileContent(fill: BrandTheme.surface, labelColor: BrandTheme.ink, hasShadow: false) {
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach([34, 27, 20, 13], id: \.self) { width in
+                        Capsule()
+                            .fill(BrandTheme.ink)
+                            .frame(width: CGFloat(width), height: 4)
                     }
-            }
-
-            Image(systemName: "square.and.arrow.up")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(BrandTheme.ink)
-                .frame(width: 22, height: 22)
-                .background(BrandTheme.surface)
-                .clipShape(Circle())
-                .overlay {
-                    Circle().stroke(BrandTheme.border, lineWidth: 1)
                 }
-                .padding(6)
+            } label: {
+                Text("LIBRARY")
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Choose a photo")
+    }
+
+    @ViewBuilder
+    private func captureTileContent(
+        fill: Color,
+        labelColor: Color,
+        hasShadow: Bool,
+        @ViewBuilder glyph: () -> some View,
+        @ViewBuilder label: () -> some View
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            glyph()
+            Spacer(minLength: 12)
+            label()
+                .font(BrandTheme.bodyFont(size: 13, weight: .bold))
+                .foregroundStyle(labelColor)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .aspectRatio(1, contentMode: .fit)
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(fill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(BrandTheme.ink, lineWidth: 2)
+                )
+                .compositingGroup()
+                .shadow(color: hasShadow ? BrandTheme.ink : .clear, radius: 0, x: hasShadow ? 4 : 0, y: hasShadow ? 4 : 0)
         }
     }
+
+    // MARK: - Your Greatest Hits
+
+    private var greatestHitsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                Text("YOUR GREATEST HITS")
+                    .font(BrandTheme.displayFont(size: 19))
+                    .foregroundStyle(BrandTheme.ink)
+                    .fixedSize()
+                Rectangle()
+                    .fill(BrandTheme.orange)
+                    .frame(height: 2)
+            }
+
+            if recentMemes.isEmpty {
+                emptyHitsBox
+            } else {
+                LazyVGrid(columns: gridColumns, spacing: gridSpacing) {
+                    ForEach(recentMemes) { meme in
+                        memeTile(meme)
+                    }
+                }
+
+                Text("TAP TO RE-SHARE")
+                    .font(BrandTheme.bodyFont(size: 11, weight: .bold))
+                    .tracking(0.6)
+                    .foregroundStyle(BrandTheme.hint)
+            }
+        }
+    }
+
+    private var emptyHitsBox: some View {
+        VStack(spacing: 6) {
+            Text("NO MEMES YET")
+                .font(BrandTheme.bodyFont(size: 13, weight: .bold))
+                .foregroundStyle(BrandTheme.ink)
+            Text("Take a photo to get started.")
+                .font(BrandTheme.bodyFont(size: 12))
+                .foregroundStyle(BrandTheme.muted)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(BrandTheme.ink, style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+        )
+    }
+
+    private func memeTile(_ meme: SavedMeme) -> some View {
+        Button {
+            if let image = MemeStore.loadImage(for: meme) {
+                shareItem = ShareImageItem(image: image)
+            }
+        } label: {
+            // Color.clear (not the image directly) drives the aspect ratio — LazyVGrid's flexible
+            // columns don't give raw image content a definite size to fit within, and the tiles
+            // end up overlapping instead of sitting in their own grid cell. The badge is its own
+            // trailing .overlay rather than nested in a ZStack, so it positions off the tile's
+            // final clipped frame instead of an intermediate, less predictable layout pass.
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+                .overlay {
+                    if let image = MemeStore.loadImage(for: meme) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        BrandTheme.skeleton
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(alignment: .bottomTrailing) {
+                    reshareBadge
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(BrandTheme.ink, lineWidth: 2)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var reshareBadge: some View {
+        Image(systemName: "arrow.up")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(BrandTheme.ink)
+            .frame(width: 26, height: 26)
+            .background(Circle().fill(BrandTheme.lime))
+            .overlay(Circle().stroke(BrandTheme.ink, lineWidth: 2))
+            .padding(6)
+    }
+
+    private var gridColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: gridSpacing), count: 3)
+    }
+
+    // MARK: - Data
 
     private static var isRunningInPreview: Bool {
         AppEnvironment.isRunningInPreview
@@ -287,7 +318,6 @@ struct HomeView: View {
 
     private func reloadRecents() {
         recentMemes = MemeStore.loadAll()
-        recentPhotos = PhotoStore.loadAll()
     }
 
     private func handleNewImage(_ image: UIImage, captured: PhotoCapture?) {
@@ -302,8 +332,6 @@ struct HomeView: View {
     }
 }
 
-#if DEBUG
-#Preview("Teeb Meme-ify") {
-    TeebMemifyAppPreview()
+#Preview("Home") {
+    ContentView()
 }
-#endif

@@ -24,37 +24,11 @@ struct ContentView: View {
                 }
                 .toolbar(.hidden, for: .navigationBar)
                 .toolbarBackground(.hidden, for: .navigationBar)
-                .ignoresSafeArea(edges: .top)
         }
+        .tint(BrandTheme.orange)
     }
 }
 
-#if DEBUG
-struct TeebMemifyAppPreview: View {
-    @State private var path = NavigationPath()
-
-    var body: some View {
-        NavigationStack(path: $path) {
-            HomeView(path: $path)
-                .navigationDestination(for: AppRoute.self) { route in
-                    switch route {
-                    case .captions(let photo):
-                        CaptionView(photo: photo, path: $path)
-                    case .editor(let caption, let photo):
-                        MemeEditorView(caption: caption, photo: photo, path: $path)
-                    case .preview(let caption, let photo, let layout):
-                        MemePreviewView(caption: caption, photo: photo, layout: layout, path: $path)
-                    }
-                }
-                .toolbar(.hidden, for: .navigationBar)
-                .toolbarBackground(.hidden, for: .navigationBar)
-                .ignoresSafeArea(edges: .top)
-        }
-        .tint(BrandTheme.accent)
-    }
+#Preview("Fetch") {
+    ContentView()
 }
-
-#Preview("Teeb Meme-ify") {
-    TeebMemifyAppPreview()
-}
-#endif

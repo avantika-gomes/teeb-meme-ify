@@ -37,8 +37,12 @@ struct MemeStyleText: View {
     }
 
     private func memeFont(size: CGFloat) -> Font {
-        if UIFont(name: "Impact", size: size) != nil {
-            return .custom("Impact", size: size)
+        // Kept in sync with MemeRenderer's fallback chain so the live preview never drifts from
+        // the rendered/saved output (see commit 77ed0a1).
+        for name in ["Anton-Regular", "Impact"] {
+            if UIFont(name: name, size: size) != nil {
+                return .custom(name, size: size)
+            }
         }
         return .system(size: size, weight: .black)
     }
