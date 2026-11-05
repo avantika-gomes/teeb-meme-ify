@@ -3,11 +3,13 @@ import SwiftUI
 struct MemeEditorView: View {
     let caption: String
     let photo: SavedPhoto
+    /// The saved meme being reopened from the grid, passed on to the preview.
+    let editing: SavedMeme?
     @Binding var path: NavigationPath
 
     @Environment(\.displayScale) private var screenScale
 
-    @State private var layout = MemeTextLayout.default
+    @State private var layout: MemeTextLayout
     @State private var pinchBaseScale: CGFloat = 1.0
     @State private var isPinching = false
     @State private var isDragging = false
@@ -20,6 +22,21 @@ struct MemeEditorView: View {
 
     private static let scaleRange: ClosedRange<CGFloat> = 0.4...2.2
     private static let positionRange: ClosedRange<CGFloat> = 0.08...0.92
+
+    /// `initialLayout` lets a meme reopened from the grid start where its text was left.
+    init(
+        caption: String,
+        photo: SavedPhoto,
+        initialLayout: MemeTextLayout = .default,
+        editing: SavedMeme? = nil,
+        path: Binding<NavigationPath>
+    ) {
+        self.caption = caption
+        self.photo = photo
+        self.editing = editing
+        self._path = path
+        self._layout = State(initialValue: initialLayout)
+    }
 
     /// Loaded once when the screen appears rather than in `body`, which re-runs on every drag frame
     /// and would read and decode the whole file each time. MemePreviewView renders from the same
@@ -151,7 +168,7 @@ struct MemeEditorView: View {
                 .accessibilityLabel("Text size")
 
             Button {
-                path.append(AppRoute.preview(caption: caption, photo: photo, layout: layout))
+                path.append(AppRoute.preview(caption: caption, photo: photo, layout: layout, editing: editing))
             } label: {
                 Text("Make the meme")
                     .frame(maxWidth: .infinity)

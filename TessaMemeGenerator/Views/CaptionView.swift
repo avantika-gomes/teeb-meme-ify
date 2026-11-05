@@ -4,6 +4,9 @@ import UIKit
 
 struct CaptionView: View {
     let photo: SavedPhoto
+    /// The saved meme being reopened from the grid, if any. Carried through to the editor and
+    /// preview so a re-made meme updates it instead of adding a copy.
+    let editing: SavedMeme?
     @Binding var path: NavigationPath
 
     @State private var currentPhoto: SavedPhoto
@@ -18,14 +21,28 @@ struct CaptionView: View {
     @State private var hasGenerated = false
     @State private var showCamera = false
     @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var toastMessage: String?
+    @State private var toastMessage: ToastMessage?
+    /// The caption run in flight, so starting another cancels it rather than letting the older
+    /// one land its captions on top of the new ones.
+    @State private var captionTask: Task<Void, Never>?
+    /// Bumped per run; the deck scrolls back to its first card each time.
+    @State private var captionRun = 0
 
     private let bottomBarHeight: CGFloat = 84
+    private static let deckContentID = "captionDeckContent"
 
-    init(photo: SavedPhoto, path: Binding<NavigationPath>) {
+    init(photo: SavedPhoto, editing: SavedMeme? = nil, path: Binding<NavigationPath>) {
         self.photo = photo
+        self.editing = editing
         self._path = path
         self._currentPhoto = State(initialValue: photo)
+
+        // Reopened from the grid: start from the meme's own caption, ready to tweak, while fresh
+        // suggestions load behind the other tab.
+        if let caption = editing?.caption, !caption.isEmpty {
+            self._mode = State(initialValue: .writeMyOwn)
+            self._customCaption = State(initialValue: caption)
+        }
     }
 
     private enum CaptionMode: Hashable {
@@ -97,7 +114,7 @@ struct CaptionView: View {
                 image = PhotoStore.loadImage(for: currentPhoto)
             }
             if !hasGenerated {
-                Task { await generateCaptions() }
+                startCaptionRun()
             }
         }
         .fullScreenCover(isPresented: $showCamera) {
@@ -263,19 +280,28 @@ struct CaptionView: View {
     /// whatever's still streaming in. Scrolling to the end shows a real card once it arrives
     /// instead of a separate "writing a few more" indicator elsewhere on screen.
     private var captionDeck: some View {
-        ScrollView(.horizontal, showsIndicators: true) {
-            HStack(spacing: 10) {
-                ForEach(captions, id: \.self) { caption in
-                    captionCard(caption)
-                }
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: true) {
+                HStack(spacing: 10) {
+                    ForEach(captions, id: \.self) { caption in
+                        captionCard(caption)
+                    }
 
-                if isStillGenerating {
-                    ForEach(0..<max(0, expectedCaptionCount - captions.count), id: \.self) { _ in
-                        skeletonCard
+                    if isStillGenerating {
+                        ForEach(0..<max(0, expectedCaptionCount - captions.count), id: \.self) { _ in
+                            skeletonCard
+                        }
                     }
                 }
+                .padding(.vertical, 2)
+                .id(Self.deckContentID)
             }
-            .padding(.vertical, 2)
+            // Each new run starts the deck over from its first card, wherever it was scrolled to.
+            .onChange(of: captionRun) { _, _ in
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(Self.deckContentID, anchor: .leading)
+                }
+            }
         }
     }
 
@@ -335,8 +361,15 @@ struct CaptionView: View {
                 .foregroundStyle(BrandTheme.hint)
 
             HStack(spacing: 10) {
-                TextField("e.g. make it about Mondays", text: $steeringText)
+                // Explicit colors: the field is always white, but without them the text follows the
+                // system appearance and turns white-on-white in Dark Mode.
+                TextField(
+                    "",
+                    text: $steeringText,
+                    prompt: Text("e.g. make it about Mondays").foregroundStyle(BrandTheme.hint)
+                )
                     .font(BrandTheme.bodyFont(size: 14))
+                    .foregroundStyle(BrandTheme.ink)
                     .padding(.horizontal, 14)
                     .frame(height: 50)
                     .background(
@@ -349,7 +382,7 @@ struct CaptionView: View {
                     )
 
                 Button {
-                    Task { await generateCaptions() }
+                    startCaptionRun()
                 } label: {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 16, weight: .bold))
@@ -380,7 +413,12 @@ struct CaptionView: View {
                 .tracking(0.6)
                 .foregroundStyle(BrandTheme.hint)
 
-            TextField("Fine. Write it yourself.", text: $customCaption)
+            // The prompt needs its own color too, or it fades to near-invisible in Dark Mode.
+            TextField(
+                "",
+                text: $customCaption,
+                prompt: Text("Fine. Write it yourself.").foregroundStyle(BrandTheme.hint)
+            )
                 .font(BrandTheme.displayFont(size: 17))
                 .textInputAutocapitalization(.characters)
                 .foregroundStyle(BrandTheme.ink)
@@ -409,9 +447,14 @@ struct CaptionView: View {
 
             Button {
                 if let activeCaption {
-                    path.append(AppRoute.editor(caption: activeCaption, photo: currentPhoto))
+                    path.append(AppRoute.editor(
+                        caption: activeCaption,
+                        photo: currentPhoto,
+                        layout: editing?.layout ?? .default,
+                        editing: editing
+                    ))
                 } else {
-                    toastMessage = "Pick a caption first."
+                    toastMessage = .error("Pick a caption first.")
                 }
             } label: {
                 HStack(spacing: 6) {
@@ -453,7 +496,7 @@ struct CaptionView: View {
         // Already upright and downsampled, so no need to read back what was just saved.
         self.image = image
         resetCaptionState()
-        Task { await generateCaptions() }
+        startCaptionRun()
     }
 
     private func resetCaptionState() {
@@ -465,6 +508,12 @@ struct CaptionView: View {
         usingFallbackCaptions = false
     }
 
+    /// Starts a caption run, cancelling any still streaming in.
+    private func startCaptionRun() {
+        captionTask?.cancel()
+        captionTask = Task { await generateCaptions() }
+    }
+
     private func generateCaptions() async {
         guard let image else {
             captions = CaptionFallback.generate(steeringText: steeringText)
@@ -473,8 +522,13 @@ struct CaptionView: View {
             return
         }
 
+        // Drop straight back to a full row of skeletons at the start of the deck, so a steer or
+        // ↻ reads as loading at once rather than leaving the old captions up until new ones land.
         isLoading = true
+        isRefining = false
         usingFallbackCaptions = false
+        captions = []
+        captionRun += 1
         if mode == .suggestions {
             selectedCaption = nil
         }
@@ -490,6 +544,7 @@ struct CaptionView: View {
 
             var received = false
             for await batch in stream {
+                guard !Task.isCancelled else { break }
                 received = true
                 captions = batch
                 hasGenerated = true
@@ -497,10 +552,11 @@ struct CaptionView: View {
                 isLoading = false
                 isRefining = true
             }
+            // A newer run has taken over the deck and its loading state; leave both to it.
+            guard !Task.isCancelled else { return }
             isRefining = false
 
-            // Both styles failed. Captions may still hold the previous run's results, so key the
-            // fallback off whether anything arrived rather than off the array being empty.
+            // Both styles failed, so nothing arrived to replace the skeletons.
             if !received {
                 captions = CaptionFallback.generate(steeringText: steeringText)
                 usingFallbackCaptions = true

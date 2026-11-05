@@ -108,12 +108,12 @@ struct SecondaryBrandButtonStyle: ButtonStyle {
 }
 
 extension View {
-    /// Confirmation toast (handoff/HANDOFF.md §2.3). Setting `message` shows it; it dismisses
-    /// itself after 2.6s. `barHeight` lifts it above a screen's bottom action bar.
-    func brandToast(message: Binding<String?>, above barHeight: CGFloat = 0) -> some View {
+    /// Toast (handoff/HANDOFF.md §2.3). Setting `message` shows it; it dismisses itself after
+    /// 2.6s. `barHeight` lifts it above a screen's bottom action bar.
+    func brandToast(message: Binding<ToastMessage?>, above barHeight: CGFloat = 0) -> some View {
         overlay(alignment: .bottom) {
-            if let text = message.wrappedValue {
-                BrandToast(message: text)
+            if let toast = message.wrappedValue {
+                BrandToast(message: toast)
                     .padding(.horizontal, 16)
                     .padding(.bottom, barHeight + 24)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -129,19 +129,47 @@ extension View {
     }
 }
 
+/// What a toast says, and whether it's confirming something or flagging a problem. A plain string
+/// literal is a confirmation; use `.error(_:)` for anything the user needs to fix.
+struct ToastMessage: Equatable, ExpressibleByStringLiteral {
+    enum Kind {
+        case success
+        case error
+    }
+
+    let text: String
+    var kind: Kind = .success
+
+    init(_ text: String, kind: Kind = .success) {
+        self.text = text
+        self.kind = kind
+    }
+
+    init(stringLiteral text: String) {
+        self.init(text)
+    }
+
+    static func error(_ text: String) -> ToastMessage {
+        ToastMessage(text, kind: .error)
+    }
+}
+
 struct BrandToast: View {
-    let message: String
+    let message: ToastMessage
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "checkmark")
+            // Orange ✓ is reserved for confirmations (HANDOFF §2.1); a problem gets an ink "!"
+            // so it never reads as success.
+            Image(systemName: message.kind == .error ? "exclamationmark" : "checkmark")
                 .font(.system(size: 10, weight: .heavy))
                 .foregroundStyle(.white)
                 .frame(width: 22, height: 22)
-                .background(Circle().fill(BrandTheme.orange))
+                .background(Circle().fill(message.kind == .error ? BrandTheme.ink : BrandTheme.orange))
                 .overlay(Circle().stroke(BrandTheme.ink, lineWidth: 2))
+                .accessibilityHidden(true)
 
-            Text(message)
+            Text(message.text)
                 .font(BrandTheme.bodyFont(size: 12, weight: .medium))
                 .foregroundStyle(BrandTheme.ink)
         }
