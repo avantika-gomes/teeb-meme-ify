@@ -8,8 +8,6 @@ struct HomeView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showCamera = false
     @State private var errorMessage: String?
-    @State private var shareItem: ShareImageItem?
-    @State private var toastMessage: String?
 
     private let tileSpacing: CGFloat = 12
     private let gridSpacing: CGFloat = 10
@@ -31,7 +29,6 @@ struct HomeView: View {
             .padding(16)
         }
         .background(BrandTheme.background.ignoresSafeArea())
-        .brandToast(message: $toastMessage)
         .onAppear {
             reloadRecentsIfNeeded()
         }
@@ -51,17 +48,6 @@ struct HomeView: View {
                 }
             )
             .ignoresSafeArea()
-        }
-        .sheet(item: $shareItem) { item in
-            ShareSheet(
-                items: [item.image],
-                onComplete: {
-                    toastMessage = "Shared."
-                },
-                onDismiss: {
-                    shareItem = nil
-                }
-            )
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
             guard let newItem else { return }
@@ -232,7 +218,7 @@ struct HomeView: View {
                     }
                 }
 
-                Text("TAP TO RE-SHARE")
+                Text("TAP TO EDIT OR RE-SHARE")
                     .font(BrandTheme.bodyFont(size: 11, weight: .bold))
                     .tracking(0.6)
                     .foregroundStyle(BrandTheme.hint)
@@ -259,9 +245,7 @@ struct HomeView: View {
 
     private func memeTile(_ meme: SavedMeme) -> some View {
         Button {
-            if let image = MemeStore.loadImage(for: meme) {
-                shareItem = ShareImageItem(image: image)
-            }
+            open(meme)
         } label: {
             // Color.clear (not the image directly) drives the aspect ratio — LazyVGrid's flexible
             // columns don't give raw image content a definite size to fit within, and the tiles
@@ -318,6 +302,26 @@ struct HomeView: View {
 
     private func reloadRecents() {
         recentMemes = MemeStore.loadAll()
+    }
+
+    /// Opens a saved meme on the Done screen to re-share or save. Memes that remember their photo
+    /// get the rest of the flow stacked underneath, so Back walks into the editor and then the
+    /// captions to change it; older ones open on their own.
+    private func open(_ meme: SavedMeme) {
+        var stack = NavigationPath()
+
+        if let photo = meme.photo,
+           let layout = meme.layout,
+           FileManager.default.fileExists(atPath: photo.fileURL.path) {
+            let caption = meme.caption ?? ""
+            stack.append(AppRoute.captions(photo, editing: meme))
+            stack.append(AppRoute.editor(caption: caption, photo: photo, layout: layout, editing: meme))
+            stack.append(AppRoute.preview(caption: caption, photo: photo, layout: layout, editing: meme))
+        } else {
+            stack.append(AppRoute.savedMeme(meme))
+        }
+
+        path = stack
     }
 
     private func handleNewImage(_ image: UIImage, captured: PhotoCapture?) {

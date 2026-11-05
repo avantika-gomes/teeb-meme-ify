@@ -3,14 +3,19 @@ import Photos
 import UIKit
 
 struct MemePreviewView: View {
-    let caption: String
-    let photo: SavedPhoto
-    let layout: MemeTextLayout
+    enum Source {
+        /// Rendered from the flow. `editing` is the saved meme this was reopened from, if any.
+        case render(caption: String, photo: SavedPhoto, layout: MemeTextLayout, editing: SavedMeme?)
+        /// An older saved meme with no photo on record, shown as saved.
+        case saved(SavedMeme)
+    }
+
+    let source: Source
     @Binding var path: NavigationPath
 
     @State private var memeImage: UIImage?
     @State private var didPersistMeme = false
-    @State private var toastMessage: String?
+    @State private var toastMessage: ToastMessage?
     @State private var errorMessage: String?
     @State private var showSaveError = false
     @State private var shareItem: ShareImageItem?
@@ -61,13 +66,13 @@ struct MemePreviewView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
-            renderMeme()
+            loadMeme()
         }
         .sheet(item: $shareItem) { item in
             ShareSheet(
                 items: [item.image],
                 onComplete: {
-                    toastMessage = "Shared — and added to your greatest hits."
+                    toastMessage = isNewMeme ? "Shared — and added to your greatest hits." : "Shared."
                 },
                 onDismiss: {
                     shareItem = nil
@@ -126,14 +131,38 @@ struct MemePreviewView: View {
         .buttonStyle(.plain)
     }
 
-    private func renderMeme() {
-        guard let image = PhotoStore.loadImage(for: photo) else { return }
-        let rendered = MemeRenderer.render(image: image, caption: caption, layout: layout)
-        memeImage = rendered
+    /// Whether this screen added a meme to the grid, rather than reopening one already there.
+    private var isNewMeme: Bool {
+        if case .render(_, _, _, nil) = source { return true }
+        return false
+    }
 
-        guard !didPersistMeme else { return }
-        didPersistMeme = true
-        _ = try? MemeStore.save(rendered, caption: caption)
+    private func loadMeme() {
+        switch source {
+        case .saved(let meme):
+            memeImage = MemeStore.loadImage(for: meme)
+
+        case .render(let caption, let photo, let layout, let editing):
+            guard let image = PhotoStore.loadImage(for: photo) else { return }
+            let rendered = MemeRenderer.render(image: image, caption: caption, layout: layout)
+            memeImage = rendered
+
+            guard !didPersistMeme else { return }
+            didPersistMeme = true
+
+            guard let editing else {
+                _ = try? MemeStore.save(rendered, caption: caption, photo: photo, layout: layout)
+                return
+            }
+
+            // Reopened from the grid: write only if something changed, and update that meme in
+            // place rather than adding a copy.
+            let unchanged = caption == editing.caption
+                && layout == editing.layout
+                && photo.id == editing.photo?.id
+            guard !unchanged else { return }
+            _ = try? MemeStore.replace(editing.id, with: rendered, caption: caption, photo: photo, layout: layout)
+        }
     }
 
     private func saveToPhotos() {

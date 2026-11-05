@@ -12,22 +12,69 @@ enum MemeStore {
         memesDirectory.appendingPathComponent("index.json")
     }
 
-    static func save(_ image: UIImage, caption: String?) throws -> SavedMeme {
+    static func save(
+        _ image: UIImage,
+        caption: String?,
+        photo: SavedPhoto? = nil,
+        layout: MemeTextLayout? = nil
+    ) throws -> SavedMeme {
         let id = UUID()
-        let fileName = "\(id.uuidString).jpg"
-        let fileURL = memesDirectory.appendingPathComponent(fileName)
+        let fileName = try writeImage(image, named: id.uuidString)
 
-        guard let data = image.jpegData(compressionQuality: 0.9) else {
-            throw MemeStoreError.encodingFailed
-        }
-
-        try data.write(to: fileURL, options: .atomic)
-
-        let meme = SavedMeme(id: id, fileName: fileName, caption: caption, createdAt: Date())
+        let meme = SavedMeme(
+            id: id,
+            fileName: fileName,
+            caption: caption,
+            createdAt: Date(),
+            photo: photo,
+            layout: layout
+        )
         var all = loadAll()
         all.insert(meme, at: 0)
         try saveMetadata(all)
         return meme
+    }
+
+    /// Swaps in a re-edited version of meme `id`, keeping its place in the grid. Falls back to
+    /// saving it as new if the original has since gone.
+    static func replace(
+        _ id: UUID,
+        with image: UIImage,
+        caption: String?,
+        photo: SavedPhoto,
+        layout: MemeTextLayout
+    ) throws -> SavedMeme {
+        var all = loadAll()
+        guard let index = all.firstIndex(where: { $0.id == id }) else {
+            return try save(image, caption: caption, photo: photo, layout: layout)
+        }
+
+        // A new file name rather than overwriting, so anything keyed by the old name doesn't keep
+        // showing the old image.
+        let previous = all[index]
+        let fileName = try writeImage(image, named: UUID().uuidString)
+
+        let meme = SavedMeme(
+            id: id,
+            fileName: fileName,
+            caption: caption,
+            createdAt: previous.createdAt,
+            photo: photo,
+            layout: layout
+        )
+        all[index] = meme
+        try saveMetadata(all)
+        try? FileManager.default.removeItem(at: previous.fileURL)
+        return meme
+    }
+
+    private static func writeImage(_ image: UIImage, named name: String) throws -> String {
+        guard let data = image.jpegData(compressionQuality: 0.9) else {
+            throw MemeStoreError.encodingFailed
+        }
+        let fileName = "\(name).jpg"
+        try data.write(to: memesDirectory.appendingPathComponent(fileName), options: .atomic)
+        return fileName
     }
 
     static func loadAll() -> [SavedMeme] {
